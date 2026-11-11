@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Algurg Map Locator</title>
+<meta name="description" content="Interactive map of key places around Algurg Automation and Controls, Dubai.">
+<meta name="theme-color" content="#f4f6f8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0c1520" media="(prefers-color-scheme: dark)">
+<meta name="color-scheme" content="light dark">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="icon" type="image/svg+xml" href="assets/icon.svg">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Algurg Map">
+<meta name="format-detection" content="telephone=no">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Algurg Map Locator">
+<meta property="og:description" content="Explore clinics, metro stations, landmarks and more around Algurg Automation and Controls, Dubai.">
+<meta property="og:url" content="https://githubbest729.github.io/agacmap/">
+<meta property="og:image" content="https://githubbest729.github.io/agacmap/assets/og-image.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://githubbest729.github.io/agacmap/assets/og-image.jpg">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div id="app">
+  <header class="topbar">
+    <img src="assets/icon.svg" alt="" width="40" height="40" class="logo">
+    <div class="titles">
+      <h1>Algurg Map Locator</h1>
+      <p id="count">21 places nearby</p>
+    </div>
+    <span id="offline-badge" class="badge" hidden role="status">Offline</span>
+  </header>
+
+  <main id="stage">
+    <div id="map" role="application" aria-label="Map of nearby places"></div>
+    <div id="skeleton" class="skeleton" aria-live="polite">
+      <div class="shimmer"></div>
+      <p>Loading map…</p>
+    </div>
+    <div id="map-error" class="empty" hidden>
+      <h2>Map unavailable</h2>
+      <p>Check your connection or API key. You can still browse all places in the list.</p>
+      <button class="btn" id="open-list-empty">Open places list</button>
+    </div>
+  </main>
+
+  <aside id="install" class="install" hidden role="dialog" aria-labelledby="install-title">
+    <img src="assets/icon.svg" alt="" width="44" height="44">
+    <div>
+      <strong id="install-title">Install Algurg Map</strong>
+      <p id="install-text">Add it to your home screen for full-screen, offline-ready access.</p>
+    </div>
+    <button class="btn" id="install-yes">Install</button>
+    <button class="btn ghost" id="install-no" aria-label="Dismiss install prompt">Not now</button>
+  </aside>
+
+  <section id="sheet" class="sheet" aria-hidden="true" aria-label="Places list">
+    <div class="grab" aria-hidden="true"></div>
+    <label class="search">
+      <span class="sr">Search places</span>
+      <input id="q" type="search" placeholder="Search places or categories" autocomplete="off" enterkeyhint="search">
+    </label>
+    <ul id="list" class="list"></ul>
+    <p id="no-results" class="empty-inline" hidden>No places match. Try a different word, like “clinic” or “metro”.</p>
+  </section>
+
+  <nav class="bottomnav" aria-label="Map actions">
+    <button id="nav-list" aria-pressed="false">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg><span>Places</span>
+    </button>
+    <button id="nav-fit">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" /></svg><span>Show all</span>
+    </button>
+    <button id="nav-hq">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg><span>Algurg</span>
+    </button>
+    <button id="nav-locate">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s7-6.3 7-12a7 7 0 1 0-14 0c0 5.7 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/></svg><span>Near me</span>
+    </button>
+  </nav>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+</div>
+
+<noscript><p style="padding:2rem">Algurg Map Locator needs JavaScript.</p></noscript>
+<script src="js/app.js"></script>
+<!-- Replace YOUR_GOOGLE_MAPS_API_KEY with your key (restrict it to githubbest729.github.io/* in Google Cloud). -->
+<script async defer onerror="window.mapFailed&&window.mapFailed()"
+  src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAPS_API_KEY&callback=initMap&loading=async"></script>
+</body>
+</html>
