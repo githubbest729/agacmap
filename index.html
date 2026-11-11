@@ -64,6 +64,7 @@
 
   <section id="sheet" class="sheet" aria-hidden="true" aria-label="Places list">
     <div class="grab" aria-hidden="true"></div>
+    <div class="sheet-head"><h2>Closest to Algurg</h2><p>Straight-line distance, nearest first</p></div>
     <label class="search">
       <span class="sr">Search places</span>
       <input id="q" type="search" placeholder="Search places or categories" autocomplete="off" enterkeyhint="search">
@@ -93,6 +94,6 @@
 <script src="js/app.js"></script>
 <!-- Replace YOUR_GOOGLE_MAPS_API_KEY with your key (restrict it to githubbest729.github.io/* in Google Cloud). -->
 <script async defer onerror="window.mapFailed&&window.mapFailed()"
-  src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAPS_API_KEY&callback=initMap&loading=async"></script>
+  src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAPS_API_KEY&callback=initMap&loading=async&libraries=marker&v=weekly"></script>
 </body>
 </html>

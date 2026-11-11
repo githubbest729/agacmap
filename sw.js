@@ -1,4 +1,4 @@
-const VERSION = 'algurg-map-v1';
+const VERSION = 'algurg-map-v3';
 const SHELL = ['./', 'index.html', 'manifest.json', 'css/styles.css', 'js/app.js',
   'assets/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png', 'favicon.ico'];
 

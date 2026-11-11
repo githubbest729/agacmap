@@ -1,6 +1,19 @@
 'use strict';
 /* Algurg Map Locator — coordinates are approximate; verify and edit below. */
-const HQ = { name: 'Algurg Automation and Controls', lat: 25.0990, lng: 55.1640 }; // TODO: set exact office location
+/* >>> SET EXACT OFFICE COORDINATES HERE (right-click the pin in Google Maps and tap the lat,lng to copy). <<<
+   Temporary override for testing: add ?hq=25.1234,55.1234 to the page URL. */
+const HQ = { name: 'Algurg Automation and Controls', lat: 25.0990, lng: 55.1640 };
+(() => { const o = new URLSearchParams(location.search).get('hq'); if (o) { const [a, b] = o.split(',').map(Number);
+  if (isFinite(a) && isFinite(b)) { HQ.lat = a; HQ.lng = b; } } })();
+
+/* Straight-line (great-circle) distance in km via the Haversine formula */
+function haversineKm(a, b) {
+  const R = 6371.0088, rad = d => d * Math.PI / 180;
+  const dLat = rad(b.lat - a.lat), dLng = rad(b.lng - a.lng);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+const fmtKm = km => (km < 10 ? km.toFixed(1) : Math.round(km)) + ' km';
 
 const CATS = {
   landmark: { label: 'Landmark', color: '#c2410c' },
@@ -35,28 +48,17 @@ const PLACES = [
   { name: 'Al Maktoum International Airport (DWC)', cat: 'transit', type: 'Airport', lat: 24.8964, lng: 55.1614 }
 ];
 
-const $ = id => document.getElementById(id);
-const DARK_STYLE = [
-  { elementType: 'geometry', stylers: [{ color: '#142233' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#a8b8c8' }] },
-  { elementType: 'labels.text.stroke', stylers: [{ color: '#0c1520' }] },
-  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#24384d' }] },
-  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#08111b' }] },
-  { featureType: 'poi', stylers: [{ visibility: 'off' }] }
-];
+PLACES.forEach(p => { p.km = haversineKm(HQ, p); });
+PLACES.sort((a, b) => a.km - b.km); // closest first; list and markers share this order
 
-let map, info, markers = [], hqMarker, mapReady = false, userMarker;
+/* Advanced Markers require a Map ID. 'DEMO_MAP_ID' works for testing; for production create your own
+   (Google Cloud Console → Map Management → Create Map ID → JavaScript, Vector) and paste it here. */
+const MAP_ID = 'DEMO_MAP_ID';
+
+const $ = id => document.getElementById(id);
+let map, info, markers = [], hqMarker, mapReady = false, userMarker, AdvancedMarkerElement, PinElement;
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const dark = matchMedia('(prefers-color-scheme: dark)');
-
-const pinIcon = (color, size = 40) => ({
-  url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size * 1.25}" viewBox="0 0 32 40">
-     <path d="M16 39C16 39 2 24 2 14a14 14 0 0 1 28 0c0 10-14 25-14 25z" fill="${color}" stroke="#fff" stroke-width="2.5"/>
-     <circle cx="16" cy="14" r="5" fill="#fff"/></svg>`),
-  scaledSize: new google.maps.Size(size, size * 1.25),
-  anchor: new google.maps.Point(size / 2, size * 1.25)
-});
 
 function toast(msg) {
   const t = $('toast'); t.textContent = msg; t.classList.add('show');
@@ -74,7 +76,8 @@ function renderList(filter = '') {
     const li = document.createElement('li');
     li.innerHTML = `<button class="item" data-i="${i}">
       <span class="dot" style="background:${CATS[p.cat].color}" aria-hidden="true"></span>
-      <span class="txt"><strong>${esc(p.name)}</strong><small>${CATS[p.cat].label} · ${esc(p.type)}</small></span></button>`;
+      <span class="txt"><strong>${esc(p.name)}</strong><small>${CATS[p.cat].label} · ${esc(p.type)}</small></span>
+      <span class="km">${fmtKm(p.km)}</span></button>`;
     ul.appendChild(li);
   });
   $('no-results').hidden = items.length > 0;
@@ -94,6 +97,7 @@ function popupHTML(p, isHQ) {
   const dir = `https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}`;
   return `<div class="iw"><span class="chip" style="background:${col}">${isHQ ? 'Headquarters' : CATS[p.cat].label}</span>
     <h2>${esc(p.name)}</h2><p>${isHQ ? 'Algurg office · centre of this map' : esc(p.type)}</p>
+    ${isHQ ? '' : `<p class="away">${fmtKm(p.km)} away <span>(straight line)</span></p>`}
     <a href="${dir}" target="_blank" rel="noopener">Get directions</a></div>`;
 }
 
@@ -114,27 +118,37 @@ function fitAll() {
   map.fitBounds(b, { top: 90, left: 24, right: 24, bottom: bar + 24 });
 }
 
-window.initMap = function () {
-  map = new google.maps.Map($('map'), {
-    center: HQ, zoom: 11, disableDefaultUI: true, gestureHandling: 'greedy',
-    clickableIcons: false, styles: dark.matches ? DARK_STYLE : []
-  });
-  info = new google.maps.InfoWindow({ maxWidth: 260 });
-  hqMarker = new google.maps.Marker({ map, position: HQ, title: HQ.name, zIndex: 999, icon: pinIcon('#0b6e8a', 52) });
-  hqMarker.addListener('click', () => { info.setContent(popupHTML(HQ, true)); info.open({ map, anchor: hqMarker }); });
-  markers = PLACES.map(p => {
-    const m = new google.maps.Marker({
-      map, position: p, title: p.name, icon: pinIcon(CATS[p.cat].color),
-      animation: reduceMotion ? null : google.maps.Animation.DROP
+// Builds the DOM content of an Advanced Marker: a coloured pin inside a >=44px tap area
+function makePin(color, scale = 1.1) {
+  const wrap = document.createElement('div');
+  wrap.className = 'pin-hit' + (reduceMotion ? '' : ' drop');
+  wrap.appendChild(new PinElement({ background: color, borderColor: '#ffffff', glyphColor: '#ffffff', scale }).element);
+  return wrap;
+}
+
+window.initMap = async function () {
+  try {
+    ({ AdvancedMarkerElement, PinElement } = await google.maps.importLibrary('marker'));
+    map = new google.maps.Map($('map'), {
+      center: HQ, zoom: 11, mapId: MAP_ID, disableDefaultUI: true, gestureHandling: 'greedy',
+      clickableIcons: false,
+      colorScheme: dark.matches ? google.maps.ColorScheme.DARK : google.maps.ColorScheme.LIGHT
     });
-    m.addListener('click', () => { info.setContent(popupHTML(p)); info.open({ map, anchor: m }); });
-    return m;
-  });
-  dark.addEventListener('change', e => map.setOptions({ styles: e.matches ? DARK_STYLE : [] }));
-  mapReady = true;
-  google.maps.event.addListenerOnce(map, 'idle', () => $('skeleton').classList.add('done'));
-  fitAll();
-  addEventListener('resize', () => setTimeout(fitAll, 250));
+    info = new google.maps.InfoWindow({ maxWidth: 260 });
+    hqMarker = new AdvancedMarkerElement({ map, position: HQ, title: HQ.name, zIndex: 999,
+      content: makePin('#0b6e8a', 1.6), gmpClickable: true });
+    hqMarker.addListener('click', () => { info.setContent(popupHTML(HQ, true)); info.open({ map, anchor: hqMarker }); });
+    markers = PLACES.map(p => {
+      const m = new AdvancedMarkerElement({ map, position: p, title: p.name,
+        content: makePin(CATS[p.cat].color), gmpClickable: true });
+      m.addListener('click', () => { info.setContent(popupHTML(p)); info.open({ map, anchor: m }); });
+      return m;
+    });
+    mapReady = true;
+    google.maps.event.addListenerOnce(map, 'idle', () => $('skeleton').classList.add('done'));
+    fitAll();
+    addEventListener('resize', () => setTimeout(fitAll, 250));
+  } catch (err) { console.error(err); window.mapFailed(); }
 };
 
 window.mapFailed = function () { $('skeleton').classList.add('done'); $('map-error').hidden = false; };
@@ -148,9 +162,11 @@ function locate() {
   toast('Finding your location…');
   navigator.geolocation.getCurrentPosition(pos => {
     const c = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-    userMarker ??= new google.maps.Marker({ map, position: c, title: 'You are here', icon: {
-      path: google.maps.SymbolPath.CIRCLE, scale: 9, fillColor: '#2563eb', fillOpacity: 1, strokeColor: '#fff', strokeWeight: 3 } });
-    userMarker.setPosition(c); map.panTo(c); map.setZoom(14);
+    if (!userMarker) {
+      const dot = document.createElement('div'); dot.className = 'me-dot';
+      userMarker = new AdvancedMarkerElement({ map, position: c, title: 'You are here', content: dot });
+    }
+    userMarker.position = c; map.panTo(c); map.setZoom(14);
   }, () => toast('Location blocked. Allow location access in your browser settings.'), { enableHighAccuracy: true, timeout: 10000 });
 }
 
