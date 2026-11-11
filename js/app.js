@@ -1,7 +1,11 @@
 'use strict';
-/* Algurg Map Locator — coordinates are approximate; verify and edit below. */
-/* >>> SET EXACT OFFICE COORDINATES HERE (right-click the pin in Google Maps and tap the lat,lng to copy). <<<
-   Temporary override for testing: add ?hq=25.1234,55.1234 to the page URL. */
+/* Algurg Map Locator. POI coordinates come from the supplied Google Plus Codes (decoded to ~14 m cells)
+   or exact Google Maps URL values (Aster Medical Center, Atlantis Monorail, Aster Clinic Al Barsha). */
+/* >>> PASTE ALGURG'S EXACT LAT/LNG ON THE NEXT LINE (replace 25.0990 and 55.1640). <<<
+   How: open Algurg in Google Maps, right-click its pin, click the "lat, lng" numbers at the top of the menu to copy.
+   NOTE: https://maps.app.goo.gl/zwPVNuzgspFVWzuF8 opens "Dubai World Trade Centre" (25.2233459, 55.2869344),
+   not Algurg, so it was NOT used. All distances are measured from this point.
+   Temporary test override: add ?hq=25.1234,55.1234 to the page URL. */
 const HQ = { name: 'Algurg Automation and Controls', lat: 25.0990, lng: 55.1640 };
 (() => { const o = new URLSearchParams(location.search).get('hq'); if (o) { const [a, b] = o.split(',').map(Number);
   if (isFinite(a) && isFinite(b)) { HQ.lat = a; HQ.lng = b; } } })();
@@ -25,27 +29,27 @@ const CATS = {
 };
 
 const PLACES = [
-  { name: 'Dubai World Trade Centre', cat: 'business', type: 'Conference center', lat: 25.2285, lng: 55.2865 },
-  { name: 'Ginger & Lace', cat: 'shopping', type: 'Clothing store', lat: 25.0770, lng: 55.1400 },
-  { name: 'Ibn Battuta Mall by Dubai Retail', cat: 'shopping', type: 'Shopping mall', lat: 25.0449, lng: 55.1175 },
-  { name: 'Fitness First | Battuta Mall', cat: 'leisure', type: 'Gym', lat: 25.0452, lng: 55.1190 },
-  { name: "Aster Clinic Emirates Tower's Sheikh Zayed Road", cat: 'health', type: 'Clinic', lat: 25.2170, lng: 55.2820 },
-  { name: 'iCare Clinics', cat: 'health', type: 'Hospital', lat: 25.1990, lng: 55.2600 },
-  { name: 'iCARE Clinic - Oasis Centre', cat: 'health', type: 'Clinic', lat: 25.1445, lng: 55.2285 },
-  { name: 'Aster Medical Center', cat: 'health', type: 'Medical center', lat: 25.2650, lng: 55.3090 },
-  { name: 'The Gardens Metro Station', cat: 'transit', type: 'Metro station', lat: 25.0457, lng: 55.1296 },
-  { name: 'Dubai Aquarium & Underwater Zoo', cat: 'leisure', type: 'Aquarium', lat: 25.1976, lng: 55.2796 },
-  { name: 'Burj Khalifa', cat: 'landmark', type: 'Landmark', lat: 25.1972, lng: 55.2744 },
-  { name: 'The Dubai Fountain', cat: 'landmark', type: 'Fountain show', lat: 25.1950, lng: 55.2755 },
-  { name: 'BURJ AL ARAB BEACH', cat: 'landmark', type: 'Hotel', lat: 25.1412, lng: 55.1853 },
-  { name: 'Atlantis Aquaventure Waterpark Monorail Station', cat: 'transit', type: 'Monorail station', lat: 25.1304, lng: 55.1170 },
-  { name: 'Ski Dubai', cat: 'leisure', type: 'Ski resort', lat: 25.1177, lng: 55.2002 },
-  { name: 'Dubai Miracle Garden', cat: 'leisure', type: 'Garden', lat: 25.0602, lng: 55.2442 },
-  { name: 'Circle K - Dubai Knowledge Park', cat: 'shopping', type: 'Convenience store', lat: 25.0985, lng: 55.1630 },
-  { name: 'Aster Clinic, Arjan', cat: 'health', type: 'Clinic', lat: 25.0640, lng: 55.2240 },
-  { name: 'Aster Clinic, Al Barsha', cat: 'health', type: 'Clinic', lat: 25.1100, lng: 55.2000 },
-  { name: 'Jumeirah Golf Estates Metro Station 1', cat: 'transit', type: 'Metro station', lat: 25.0309, lng: 55.1572 },
-  { name: 'Al Maktoum International Airport (DWC)', cat: 'transit', type: 'Airport', lat: 24.8964, lng: 55.1614 }
+  { name: 'Dubai World Trade Centre', cat: 'business', type: 'Conference center', lat: 25.223312, lng: 55.286938 },
+  { name: 'Ginger & Lace', cat: 'shopping', type: 'Clothing store', lat: 25.229312, lng: 55.319437 },
+  { name: 'Ibn Battuta Mall by Dubai Retail', cat: 'shopping', type: 'Shopping mall', lat: 25.044563, lng: 55.120312 },
+  { name: 'Fitness First | Battuta Mall', cat: 'leisure', type: 'Gym', lat: 25.048063, lng: 55.121938 },
+  { name: "Aster Clinic Emirates Tower's Sheikh Zayed Road", cat: 'health', type: 'Clinic', lat: 25.217938, lng: 55.278687 },
+  { name: 'iCare Clinics', cat: 'health', type: 'Hospital', lat: 25.169313, lng: 55.241312 },
+  { name: 'iCARE Clinic - Oasis Centre', cat: 'health', type: 'Clinic', lat: 25.168813, lng: 55.241937 },
+  { name: 'Aster Medical Center', cat: 'health', type: 'Medical center', lat: 25.0292331, lng: 55.2705119 },
+  { name: 'The Gardens Metro Station', cat: 'transit', type: 'Metro station', lat: 25.043688, lng: 55.134437 },
+  { name: 'Dubai Aquarium & Underwater Zoo', cat: 'leisure', type: 'Aquarium', lat: 25.197563, lng: 55.278562 },
+  { name: 'Burj Khalifa', cat: 'landmark', type: 'Landmark', lat: 25.197187, lng: 55.274437 },
+  { name: 'The Dubai Fountain', cat: 'landmark', type: 'Fountain show', lat: 25.195187, lng: 55.275188 },
+  { name: 'BURJ AL ARAB BEACH', cat: 'landmark', type: 'Hotel', lat: 25.159813, lng: 55.205438 },
+  { name: 'Atlantis Aquaventure Waterpark Monorail Station', cat: 'transit', type: 'Monorail station', lat: 25.1328042, lng: 55.1188256 },
+  { name: 'Ski Dubai', cat: 'leisure', type: 'Ski resort', lat: 25.117188, lng: 55.198313 },
+  { name: 'Dubai Miracle Garden', cat: 'leisure', type: 'Garden', lat: 25.059812, lng: 55.244563 },
+  { name: 'Circle K - Dubai Knowledge Park', cat: 'shopping', type: 'Convenience store', lat: 25.103687, lng: 55.163063 },
+  { name: 'Aster Clinic, Arjan', cat: 'health', type: 'Clinic', lat: 25.062188, lng: 55.237812 },
+  { name: 'Aster Clinic, Al Barsha', cat: 'health', type: 'Clinic', lat: 25.1127541, lng: 55.2009557 },
+  { name: 'Jumeirah Golf Estates Metro Station 1', cat: 'transit', type: 'Metro station', lat: 25.017813, lng: 55.163313 },
+  { name: 'Al Maktoum International Airport (DWC)', cat: 'transit', type: 'Airport', lat: 24.885938, lng: 55.158813 }
 ];
 
 PLACES.forEach(p => { p.km = haversineKm(HQ, p); });
