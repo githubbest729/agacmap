@@ -1,8 +1,10 @@
 'use strict';
-/* Algurg Map Locator & In-App Navigator (2026 English Edition)
-   - Map Tiles: CARTO Dark Matter (dark_all) & Positron (light_all) with English labels + CARTO Basemaps API key
-   - Routing & Turn-by-Turn: Free keyless OSRM server with automatic UAE Arabic-to-English road translation
-   - Anywhere UAE Search & Reverse Geocoding: Photon / OpenStreetMap API forced to English (lang=en) */
+/* Algurg Map Locator & In-App Navigator (v14 — 2026 English Edition)
+   - Zero-dependency Marker Clustering + Active Destination Spotlight
+   - Auto-collapsing Places Sheet & Clean Drive Mode Layout
+   - Live GPS Compass Heading + Optional Web Speech API Voice Guidance
+   - CARTO Dark Matter (dark_all) & Positron (light_all) English Map Tiles + CARTO Basemaps API Key
+   - Free keyless OSRM Routing + UAE Arabic-to-English Street Translator + Photon UAE Geocoding */
 
 const HQ = { name: 'Algurg Automation and Controls', lat: 24.9999384, lng: 55.1300456 };
 (() => {
@@ -31,7 +33,7 @@ function fmtDubaiETA(min) {
   }
 }
 
-/* ---------- Automatic Dubai / UAE Arabic-to-English Road Name Translator ---------- */
+/* ---------- Automatic Dubai / UAE Arabic-to-English Road Translator ---------- */
 const UAE_ROADS = {
   'شارع الشيخ زايد': 'Sheikh Zayed Rd',
   'شارع الشيخ محمد بن زايد': 'Sheikh Mohammed Bin Zayed Rd',
@@ -112,8 +114,7 @@ const AR_CHARS = {
 
 function transliterateWord(w) {
   if (AR_WORDS[w]) return AR_WORDS[w];
-  let prefix = '';
-  let core = w;
+  let prefix = '', core = w;
   if (core.startsWith('ال') && core.length > 3) {
     prefix = 'Al ';
     core = core.slice(2);
@@ -123,7 +124,7 @@ function transliterateWord(w) {
   let out = '';
   for (let i = 0; i < core.length; i++) {
     const ch = core[i];
-    if (/[\u064B-\u065F\u0670]/.test(ch)) continue; // strip diacritics
+    if (/[\u064B-\u065F\u0670]/.test(ch)) continue;
     out += AR_CHARS[ch] !== undefined ? AR_CHARS[ch] : ch;
   }
   out = out.replace(/^a+/, 'a').replace(/(.)\1+/g, '$1');
@@ -134,7 +135,6 @@ function transliterateWord(w) {
 function toEnglishRoad(raw) {
   if (!raw) return '';
   let s = String(raw).trim();
-  // Remove Arabic characters inside mixed labels if English is already provided alongside (e.g. "Sheikh Zayed Rd - شارع الشيخ زايد")
   if (/[A-Za-z]/.test(s) && /[\u0600-\u06FF]/.test(s)) {
     const cleaned = s.replace(/[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]+/g, ' ')
       .replace(/[-–—/|()]+/g, ' ')
@@ -223,9 +223,9 @@ function loadSavedDrive() {
 }
 loadSavedDrive(); resort();
 
-/* ---------- Map Tile Providers (English Labels in Both Dark & Light Modes) ---------- */
+/* ---------- Map Tile Providers (English Labels in Dark & Light Mode) ---------- */
 const CARTO_KEY = 'cb1_57cr_1_f31ce75418c7d6e7e9f3426f';
-const OSM_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors';
+const OSM_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>';
 const CARTO_ATTR = OSM_ATTR + ' &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>';
 const CARTO_URLS = {
   dark:  `https://basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png?key=${CARTO_KEY}`,
@@ -233,8 +233,15 @@ const CARTO_URLS = {
 };
 
 const $ = id => document.getElementById(id);
-let map, tileLayer, markers = [], hqMarker, customMarker = null, mapReady = false, userMarker = null;
+let map, tileLayer, markerLayer, clusterLayer, markers = [], hqMarker, customMarker = null, mapReady = false, userMarker = null;
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function viewTransition(fn) {
+  if (!reduceMotion && typeof document.startViewTransition === 'function') {
+    try { document.startViewTransition(fn); return; } catch {}
+  }
+  fn();
+}
 
 function toast(msg) {
   const t = $('toast');
@@ -247,13 +254,18 @@ const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;'
 
 /* ---------- Light / Dark Theme Management ---------- */
 let currentTheme = (() => {
-  try { return localStorage.getItem('algurgTheme') || 'dark'; } catch { return 'dark'; }
+  try {
+    const saved = localStorage.getItem('algurgTheme');
+    if (saved === 'light' || saved === 'dark') return saved;
+  } catch {}
+  return matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
 })();
+
 function applyTheme(theme) {
   currentTheme = theme === 'light' ? 'light' : 'dark';
   document.documentElement.dataset.theme = currentTheme;
   const meta = $('meta-theme');
-  if (meta) meta.content = currentTheme === 'light' ? '#f2f5f9' : '#0b131e';
+  if (meta) meta.content = currentTheme === 'light' ? '#eef2f6' : '#0b131e';
   const ico = $('theme-icon');
   if (ico) {
     ico.innerHTML = currentTheme === 'dark'
@@ -264,6 +276,35 @@ function applyTheme(theme) {
   try { localStorage.setItem('algurgTheme', currentTheme); } catch {}
 }
 applyTheme(currentTheme);
+
+/* ---------- Web Speech API Voice Guidance ---------- */
+let voiceEnabled = (() => {
+  try { return localStorage.getItem('algurgVoice') !== '0'; } catch { return true; }
+})();
+let lastSpokenText = '';
+
+function updateVoiceUI() {
+  const btn = $('hud-voice'), ico = $('voice-icon');
+  if (!btn || !ico) return;
+  btn.setAttribute('aria-pressed', String(voiceEnabled));
+  ico.innerHTML = voiceEnabled
+    ? '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>'
+    : '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/>';
+}
+updateVoiceUI();
+
+function speakTurn(text, force = false) {
+  if (!voiceEnabled || !text || typeof window.speechSynthesis !== 'object') return;
+  if (!force && text === lastSpokenText) return;
+  lastSpokenText = text;
+  try {
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'en-US';
+    u.rate = 1.02;
+    window.speechSynthesis.speak(u);
+  } catch {}
+}
 
 /* ---------- Places List & UAE Anywhere Search ---------- */
 let catFilter = 'all', geoResults = [], geoTimer = null;
@@ -278,6 +319,7 @@ function buildChips() {
     catFilter = b.dataset.cat;
     box.querySelectorAll('.chip-btn').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
     renderList($('q').value);
+    updateClusters();
   });
 }
 
@@ -349,14 +391,17 @@ async function searchUAE(query) {
 function toggleSheet(open) {
   const s = $('sheet');
   const on = open ?? !s.classList.contains('open');
-  s.classList.toggle('open', on);
-  s.setAttribute('aria-hidden', String(!on));
-  $('app').classList.toggle('sheet-open', on);
-  $('nav-list').setAttribute('aria-pressed', String(on));
+  if (s.classList.contains('open') === on) return;
+  viewTransition(() => {
+    s.classList.toggle('open', on);
+    s.setAttribute('aria-hidden', String(!on));
+    $('app').classList.toggle('sheet-open', on);
+    $('nav-list').setAttribute('aria-pressed', String(on));
+  });
   if (on) setTimeout(() => $('q').focus({ preventScroll: true }), 260);
 }
 
-/* ---------- Popups & Pins ---------- */
+/* ---------- Popups, Pins & Zero-Dependency Marker Clustering ---------- */
 function popupHTML(p, isHQ) {
   const col = isHQ ? '#0284c7' : (p.isCustom ? '#0ea5e9' : CATS[p.cat].color);
   if (isHQ) {
@@ -389,12 +434,85 @@ function popupHTML(p, isHQ) {
 const POPUP_OPTS = { maxWidth: 275, autoPanPaddingTopLeft: [16, 90], autoPanPaddingBottomRight: [16, 120] };
 const refreshPopups = () => markers.forEach((m, i) => m && m.setPopupContent(popupHTML(PLACES[i])));
 
-function pinIcon(color, scale = 1, pulse = false) {
+function pinIcon(color, scale = 1, pulse = false, extraClass = '') {
   const w = Math.round(32 * scale), h = Math.round(40 * scale), bw = Math.max(w, 44), bh = Math.max(h, 44);
   return L.divIcon({
-    className: 'pin-hit' + (reduceMotion ? '' : ' drop'),
+    className: `pin-hit ${extraClass}`.trim(),
     iconSize: [bw, bh], iconAnchor: [bw / 2, bh], popupAnchor: [0, -h + 4],
     html: `${pulse ? '<span class="pulse" aria-hidden="true"></span>' : ''}<svg width="${w}" height="${h}" viewBox="0 0 32 40" aria-hidden="true"><path d="M16 39C16 39 2 24 2 14a14 14 0 0 1 28 0c0 10-14 25-14 25z" fill="${color}" stroke="#fff" stroke-width="2.5"/><circle cx="16" cy="14" r="5" fill="#fff"/></svg>`
+  });
+}
+
+function updateClusters() {
+  if (!mapReady || !markerLayer || !clusterLayer) return;
+  markerLayer.clearLayers();
+  clusterLayer.clearLayers();
+
+  const zoom = map.getZoom();
+  const radiusPx = zoom >= 14 ? 0 : (zoom >= 12.5 ? 38 : 50);
+  const visited = new Set();
+
+  // Filter markers by active category chip
+  const candidates = [];
+  PLACES.forEach((p, i) => {
+    if (!markers[i]) return;
+    if (catFilter !== 'all' && p.cat !== catFilter && activeTarget !== i) return;
+    candidates.push(i);
+  });
+
+  candidates.forEach(i => {
+    if (visited.has(i)) return;
+    const p = PLACES[i];
+    const m = markers[i];
+
+    // Keep active route destination always unclustered and highlighted
+    if (activeTarget === i || radiusPx === 0) {
+      visited.add(i);
+      const cls = activeTarget === i ? 'active' : (activeTarget !== null ? 'dimmed' : '');
+      m.setIcon(pinIcon(CATS[p.cat].color, activeTarget === i ? 1.2 : 1, activeTarget === i, cls));
+      markerLayer.addLayer(m);
+      return;
+    }
+
+    const ptA = map.latLngToLayerPoint([p.lat, p.lng]);
+    const group = [i];
+    visited.add(i);
+
+    candidates.forEach(j => {
+      if (visited.has(j) || activeTarget === j) return;
+      const ptB = map.latLngToLayerPoint([PLACES[j].lat, PLACES[j].lng]);
+      if (ptA.distanceTo(ptB) <= radiusPx) {
+        group.push(j);
+        visited.add(j);
+      }
+    });
+
+    if (group.length === 1) {
+      const cls = activeTarget !== null ? 'dimmed' : '';
+      m.setIcon(pinIcon(CATS[p.cat].color, 1, false, cls));
+      markerLayer.addLayer(m);
+    } else {
+      let sumLat = 0, sumLng = 0;
+      const bounds = L.latLngBounds([]);
+      group.forEach(idx => {
+        sumLat += PLACES[idx].lat;
+        sumLng += PLACES[idx].lng;
+        bounds.extend([PLACES[idx].lat, PLACES[idx].lng]);
+      });
+      const cMarker = L.marker([sumLat / group.length, sumLng / group.length], {
+        icon: L.divIcon({
+          className: 'cluster-hit',
+          iconSize: [44, 44],
+          iconAnchor: [22, 22],
+          html: `<div class="cluster-badge" title="${group.length} places — tap to zoom in">${group.length}</div>`
+        }),
+        zIndexOffset: 400
+      });
+      cMarker.on('click', () => {
+        map.fitBounds(bounds.pad(0.25), { maxZoom: Math.max(15, zoom + 2.5), animate: !reduceMotion });
+      });
+      clusterLayer.addLayer(cMarker);
+    }
   });
 }
 
@@ -403,7 +521,7 @@ function setCustomPin(dest, openPop = true) {
   if (!mapReady) return;
   if (!customMarker) {
     customMarker = L.marker([dest.lat, dest.lng], {
-      icon: pinIcon('#0ea5e9', 1.25, true), title: dest.name, zIndexOffset: 900
+      icon: pinIcon('#0ea5e9', 1.25, true, 'active'), title: dest.name, zIndexOffset: 900
     }).addTo(map);
   } else {
     customMarker.setLatLng([dest.lat, dest.lng]);
@@ -454,7 +572,7 @@ function getUserPos() {
     if (!navigator.geolocation) return rej(new Error('unsupported'));
     navigator.geolocation.getCurrentPosition(
       pos => {
-        userPos = { lat: pos.coords.latitude, lng: pos.coords.longitude, t: Date.now() };
+        userPos = { lat: pos.coords.latitude, lng: pos.coords.longitude, heading: pos.coords.heading, t: Date.now() };
         updateUserDot(userPos);
         res(userPos);
       },
@@ -469,10 +587,20 @@ function updateUserDot(c) {
   if (!userMarker) {
     userMarker = L.marker([c.lat, c.lng], {
       title: 'You are here',
-      icon: L.divIcon({ className: '', html: '<div class="me-dot"></div>', iconSize: [20, 20], iconAnchor: [10, 10] })
+      icon: L.divIcon({
+        className: '',
+        html: '<div class="me-wrap" id="me-wrap"><div class="me-cone"></div><div class="me-dot"></div></div>',
+        iconSize: [36, 36],
+        iconAnchor: [18, 18]
+      })
     }).addTo(map);
   } else {
     userMarker.setLatLng([c.lat, c.lng]);
+  }
+  const wrap = $('me-wrap');
+  if (wrap && typeof c.heading === 'number' && isFinite(c.heading)) {
+    wrap.style.setProperty('--heading', `${c.heading}deg`);
+    wrap.style.setProperty('--has-heading', '1');
   }
 }
 
@@ -549,8 +677,10 @@ function stopDriveMode(silent = false) {
     navigator.geolocation.clearWatch(driveWatchId);
     driveWatchId = null;
   }
+  try { window.speechSynthesis?.cancel(); } catch {}
   $('drive-hud').hidden = true;
   $('app').classList.remove('drive-on');
+  $('rc-drive-lbl').textContent = 'Start Drive';
   if (!silent) toast('Navigation ended');
 }
 
@@ -563,6 +693,7 @@ function clearRoute() {
   $('route-card').hidden = true;
   $('app').classList.remove('route-on');
   map?.closePopup();
+  updateClusters();
 }
 
 function selectAltRoute(idx) {
@@ -619,10 +750,12 @@ function paintCard(t, mode, o, d, r, note) {
 
 async function showRoute(t, mode = routeMode) {
   if (!mapReady) return;
+  toggleSheet(false); // Always close Places sheet so Route Card & map never collide
   stopDriveMode(true);
   const seq = ++routeSeq;
   activeTarget = t;
   activeAltIdx = 0;
+  updateClusters();
 
   if (mode === 'me') {
     toast('Finding your GPS location…');
@@ -681,25 +814,32 @@ async function showRoute(t, mode = routeMode) {
 }
 
 function startDriveMode() {
+  if (driveWatchId !== null) {
+    stopDriveMode(false);
+    return;
+  }
   if (activeTarget === null || !activeRoutes[activeAltIdx]) return;
   if (!navigator.geolocation) {
     toast('GPS tracking is not supported on this browser.');
     return;
   }
+  toggleSheet(false);
   const dest = endpoints(activeTarget, routeMode)[1];
   const rt = activeRoutes[activeAltIdx];
   const firstStep = rt.steps[0];
+  const firstInstruction = firstStep ? stepText(firstStep) : `Drive to ${dest.name}`;
 
   $('app').classList.add('drive-on');
   $('drive-hud').hidden = false;
+  $('rc-drive-lbl').textContent = 'Driving…';
   $('hud-icon').innerHTML = maneuverSVG(firstStep ? firstStep.maneuver : {});
-  $('hud-step').textContent = firstStep ? stepText(firstStep) : `Drive to ${dest.name}`;
+  $('hud-step').textContent = firstInstruction;
   $('hud-meta').textContent = `${fmtKm(rt.km)} · ${fmtMin(rt.min)} · Arrive ${fmtDubaiETA(rt.min)}`;
-  toast('Live GPS guidance started');
+  speakTurn(`Starting route to ${dest.name}. ${firstInstruction}`, true);
 
   driveWatchId = navigator.geolocation.watchPosition(
     pos => {
-      const c = { lat: pos.coords.latitude, lng: pos.coords.longitude, t: Date.now() };
+      const c = { lat: pos.coords.latitude, lng: pos.coords.longitude, heading: pos.coords.heading, t: Date.now() };
       userPos = c;
       updateUserDot(c);
       map.panTo([c.lat, c.lng], { animate: !reduceMotion });
@@ -707,11 +847,16 @@ function startDriveMode() {
       const remKm = haversineKm(c, dest) * ROAD_FACTOR;
       const remMin = Math.max(1, Math.round(remKm / AVG_KMH * 60));
       if (remKm < 0.07) {
-        $('hud-step').textContent = `Arrived at ${dest.name}`;
+        const msg = `Arrived at ${dest.name}`;
+        $('hud-step').textContent = msg;
         $('hud-meta').textContent = 'Destination reached';
-        toast(`Arrived at ${dest.name}!`);
+        toast(msg);
+        speakTurn(msg, true);
         stopDriveMode(true);
       } else {
+        $('rc-km').textContent = fmtKm(remKm);
+        $('rc-min').textContent = fmtMin(remMin);
+        $('rc-eta').textContent = fmtDubaiETA(remMin);
         $('hud-meta').textContent = `${fmtKm(remKm)} left · ~${fmtMin(remMin)} · ETA ${fmtDubaiETA(remMin)}`;
       }
     },
@@ -778,11 +923,14 @@ function initMap() {
     tileLayer.on('tileerror', () => {
       if (!warned) {
         warned = true;
-        toast(navigator.onLine ? 'Some map tiles failed to load' : 'Offline: showing cached map areas');
+        toast(navigator.onLine ? 'Some map tiles failed to load' : 'Offline: showing cached Dubai map tiles');
       }
     });
 
     routeGroup = L.layerGroup().addTo(map);
+    markerLayer = L.layerGroup().addTo(map);
+    clusterLayer = L.layerGroup().addTo(map);
+
     hqMarker = L.marker([HQ.lat, HQ.lng], {
       icon: pinIcon('#0284c7', 1.45, true), title: HQ.name, alt: HQ.name, zIndexOffset: 1000
     }).addTo(map).bindPopup(popupHTML(HQ, true), POPUP_OPTS);
@@ -790,13 +938,14 @@ function initMap() {
     markers = PLACES.map((p, i) => {
       try {
         return L.marker([p.lat, p.lng], { icon: pinIcon(CATS[p.cat].color), title: p.name, alt: p.name })
-          .addTo(map)
           .bindPopup(popupHTML(p), POPUP_OPTS)
           .on('click', () => showRoute(i));
       } catch {
         return null;
       }
     });
+
+    map.on('zoomend moveend', updateClusters);
 
     // Tap anywhere on the map to drop a destination pin and route in English
     map.on('click', async e => {
@@ -817,8 +966,9 @@ function initMap() {
 
     mapReady = true;
     fitAll();
+    updateClusters();
     loadDriving();
-    addEventListener('resize', () => { map.invalidateSize(); });
+    addEventListener('resize', () => { map.invalidateSize(); updateClusters(); });
   } catch (err) {
     console.error(err);
     window.mapFailed();
@@ -841,7 +991,7 @@ function locate() {
   );
 }
 
-$('theme-toggle').onclick = () => applyTheme(currentTheme === 'dark' ? 'light' : 'dark');
+$('theme-toggle').onclick = () => viewTransition(() => applyTheme(currentTheme === 'dark' ? 'light' : 'dark'));
 $('tool-zoom-in').onclick = () => map?.zoomIn();
 $('tool-zoom-out').onclick = () => map?.zoomOut();
 $('nav-list').onclick = () => toggleSheet();
@@ -854,6 +1004,14 @@ $('nav-locate').onclick = locate;
 $('rc-close').onclick = () => { clearRoute(); fitAll(); };
 $('rc-drive').onclick = startDriveMode;
 $('hud-stop').onclick = () => stopDriveMode(false);
+$('hud-voice').onclick = () => {
+  voiceEnabled = !voiceEnabled;
+  try { localStorage.setItem('algurgVoice', voiceEnabled ? '1' : '0'); } catch {}
+  updateVoiceUI();
+  toast(voiceEnabled ? 'Voice guidance on' : 'Voice guidance muted');
+  if (voiceEnabled) speakTurn($('hud-step').textContent, true);
+  else try { window.speechSynthesis?.cancel(); } catch {}
+};
 
 $('route-card').addEventListener('click', e => {
   const modeBtn = e.target.closest('[data-mode]');
@@ -900,7 +1058,6 @@ $('q-clear').onclick = () => {
 $('list').addEventListener('click', e => {
   const b = e.target.closest('.item');
   if (!b) return;
-  toggleSheet(false);
   showRoute(+b.dataset.i);
 });
 
@@ -909,7 +1066,6 @@ $('geo-list').addEventListener('click', e => {
   if (!b) return;
   const dest = geoResults[+b.dataset.geo];
   if (!dest) return;
-  toggleSheet(false);
   setCustomPin(dest, false);
   showRoute(dest);
 });
@@ -938,8 +1094,20 @@ if (sharedI >= 0) {
 }
 if (qp.get('view') === 'list') toggleSheet(true);
 
-/* ---------- Online / Offline Status ---------- */
-const syncNet = () => { $('offline-badge').hidden = navigator.onLine; };
+/* ---------- Online / Offline & Cached Tiles Status ---------- */
+async function updateCacheMeta() {
+  const el = $('cache-meta');
+  if (!el || !('caches' in window)) return;
+  try {
+    const c = await caches.open('algurg-tiles-v7');
+    const keys = await c.keys();
+    el.textContent = `Algurg Map v14 · ${keys.length} offline map tiles cached`;
+  } catch {}
+}
+const syncNet = () => {
+  $('offline-badge').hidden = navigator.onLine;
+  updateCacheMeta();
+};
 addEventListener('online', syncNet);
 addEventListener('offline', syncNet);
 syncNet();
@@ -949,7 +1117,7 @@ let deferred;
 const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
 const dismissed = () => { try { return localStorage.getItem('installDismissed') === '1'; } catch { return false; } };
 const showInstall = () => {
-  if (!standalone && !dismissed() && !$('app').classList.contains('route-on') && !$('app').classList.contains('sheet-open')) {
+  if (!standalone && !dismissed() && !$('app').classList.contains('route-on') && !$('app').classList.contains('sheet-open') && !$('app').classList.contains('drive-on')) {
     $('install').hidden = false;
   }
 };

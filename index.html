@@ -31,14 +31,14 @@
 </head>
 <body>
 <div id="app">
-  <!-- Top Command Bar -->
+  <!-- Top Glass Command Bar -->
   <header class="topbar">
     <img src="assets/icon.svg" alt="" width="38" height="38" class="logo">
     <div class="titles">
       <h1>Algurg Map Locator</h1>
       <p id="count">21 places &middot; Jebel Ali HQ</p>
     </div>
-    <span id="offline-badge" class="badge" hidden role="status">Offline</span>
+    <span id="offline-badge" class="badge" hidden role="status">Offline &middot; Cached Map</span>
     <button id="theme-toggle" class="icon-btn sm" type="button" aria-label="Switch map theme" title="Switch Light / Dark theme">
       <svg id="theme-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
     </button>
@@ -49,8 +49,11 @@
     <div class="hud-icon" id="hud-icon" aria-hidden="true"></div>
     <div class="hud-main">
       <strong id="hud-step">Follow route</strong>
-      <small id="hud-meta">Calculating…</small>
+      <small id="hud-meta">Calculating&hellip;</small>
     </div>
+    <button id="hud-voice" class="icon-btn sm" type="button" aria-pressed="true" aria-label="Toggle voice guidance" title="Toggle voice guidance">
+      <svg id="voice-icon" viewBox="0 0 24 24" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+    </button>
     <button id="hud-stop" class="pill danger" type="button">End</button>
   </section>
 
@@ -59,7 +62,7 @@
     <div id="map" role="application" aria-label="Interactive Dubai navigation map"></div>
     <div id="skeleton" class="skeleton" aria-live="polite">
       <div class="shimmer"></div>
-      <p>Loading Algurg Map…</p>
+      <p>Loading Algurg Map&hellip;</p>
     </div>
     <div id="map-error" class="empty" hidden>
       <h2>Map unavailable</h2>
@@ -74,7 +77,7 @@
     <button id="tool-zoom-out" class="icon-btn sm" type="button" aria-label="Zoom out" title="Zoom out">&minus;</button>
   </div>
 
-  <!-- Install Prompt (auto-hidden when route card or sheet is open) -->
+  <!-- Install Prompt (auto-hidden when route card, sheet, or drive HUD is open) -->
   <aside id="install" class="install" hidden role="dialog" aria-labelledby="install-title">
     <img src="assets/icon.svg" alt="" width="44" height="44">
     <div>
@@ -95,13 +98,13 @@
       <button id="rc-close" class="icon-btn sm" type="button" aria-label="Close route">&times;</button>
     </div>
 
-    <div class="seg" role="group" aria-label="Route direction">
+    <div class="seg rc-hide-drive" role="group" aria-label="Route direction">
       <button type="button" data-mode="to" aria-pressed="false">To Algurg HQ</button>
       <button type="button" data-mode="from" aria-pressed="true">From Algurg HQ</button>
       <button type="button" data-mode="me" aria-pressed="false">From my GPS</button>
     </div>
 
-    <div id="rc-alts" class="rc-alts" hidden role="group" aria-label="Alternative routes"></div>
+    <div id="rc-alts" class="rc-alts rc-hide-drive" hidden role="group" aria-label="Alternative routes"></div>
 
     <div class="rc-stats">
       <div class="stat-box"><strong id="rc-km">&hellip;</strong><span>Distance</span></div>
@@ -109,14 +112,14 @@
       <div class="stat-box accent"><strong id="rc-eta">&hellip;</strong><span>Dubai ETA</span></div>
     </div>
 
-    <div id="rc-next" class="rc-next" hidden>
+    <div id="rc-next" class="rc-next rc-hide-drive" hidden>
       <span class="next-ico" id="rc-next-ico" aria-hidden="true"></span>
       <span id="rc-next-txt"></span>
     </div>
 
-    <p id="rc-note" class="rc-note" role="status"></p>
+    <p id="rc-note" class="rc-note rc-hide-drive" role="status"></p>
 
-    <details class="steps" id="rc-details">
+    <details class="steps rc-hide-drive" id="rc-details">
       <summary>Turn-by-turn directions (<span id="rc-step-count">0</span>&nbsp;steps)</summary>
       <ol id="rc-steps"></ol>
     </details>
@@ -124,7 +127,7 @@
     <div class="rc-actions">
       <button id="rc-drive" class="pill primary" type="button">
         <svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
-        <span>Start Drive</span>
+        <span id="rc-drive-lbl">Start Drive</span>
       </button>
       <button id="rc-share" class="pill secondary" type="button">Share</button>
       <a id="rc-ext" class="icon-btn sm ext" href="#" target="_blank" rel="noopener" aria-label="Open in Google Maps" title="Open in Google Maps">
@@ -144,7 +147,7 @@
     <div class="search-wrap">
       <label class="search">
         <span class="sr">Search preset places or any address in Dubai &amp; UAE</span>
-        <input id="q" type="search" placeholder="Search places or any Dubai address…" autocomplete="off" enterkeyhint="search">
+        <input id="q" type="search" placeholder="Search places or any Dubai address&hellip;" autocomplete="off" enterkeyhint="search">
       </label>
       <button id="q-clear" class="icon-btn sm" type="button" hidden aria-label="Clear search">&times;</button>
     </div>
@@ -155,6 +158,7 @@
         <ul id="geo-list" class="list"></ul>
       </div>
       <p id="no-results" class="empty-inline" hidden>No matching places. Try typing a street, mall, or company in Dubai, or tap anywhere on the map.</p>
+      <p id="cache-meta" class="sheet-ver">Algurg Map v14 &middot; Jebel Ali Corporate Office</p>
     </div>
   </section>
 

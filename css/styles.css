@@ -1,7 +1,8 @@
 :root{
-  --bg:#0b131e; --surface:#132030; --glass:rgba(19,32,48,.86); --glass-line:rgba(255,255,255,.14);
+  --bg:#0b131e; --surface:#132030; --glass:rgba(19,32,48,.88); --glass-line:rgba(255,255,255,.14);
   --ink:#eef4fa; --muted:#9fb1c4; --line:#26384d;
   --accent:#38bdf8; --accent-glow:rgba(56,189,248,.28); --on-accent:#041e2c;
+  --route-casing:#0f172a;
   --amber:#f59e0b; --green:#10b981; --danger:#ef4444;
   --shadow:0 10px 32px rgba(0,0,0,.48);
   --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --r:18px; --r-sm:12px;
@@ -9,11 +10,12 @@
   --nav-h:64px; color-scheme:dark;
 }
 :root[data-theme="light"]{
-  --bg:#f2f5f9; --surface:#ffffff; --glass:rgba(255,255,255,.88); --glass-line:rgba(15,27,42,.12);
-  --ink:#0f1b2a; --muted:#4b5b6c; --line:#d6dfe8;
-  --accent:#0284c7; --accent-glow:rgba(2,132,199,.22); --on-accent:#ffffff;
+  --bg:#eef2f6; --surface:#ffffff; --glass:rgba(255,255,255,.92); --glass-line:rgba(15,27,42,.15);
+  --ink:#0f172a; --muted:#475569; --line:#cbd5e1;
+  --accent:#0369a1; --accent-glow:rgba(3,105,161,.24); --on-accent:#ffffff;
+  --route-casing:#ffffff;
   --amber:#d97706; --green:#059669; --danger:#dc2626;
-  --shadow:0 10px 30px rgba(15,27,42,.14);
+  --shadow:0 10px 28px rgba(15,23,42,.14);
   color-scheme:light;
 }
 *,*::before,*::after{box-sizing:border-box}
@@ -39,19 +41,20 @@ h1,h2,p{margin:0}
 .titles{min-width:0;flex:1}
 h1{font-size:1.05rem;line-height:1.25;font-weight:700;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #count{font-size:.8125rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.badge{background:var(--amber);color:#1f1100;font-weight:700;font-size:.75rem;padding:3px var(--s2);border-radius:99px;flex:none}
+.badge{background:var(--amber);color:#1f1100;font-weight:800;font-size:.72rem;padding:4px 10px;border-radius:99px;flex:none;white-space:nowrap}
 
 /* Live GPS Drive Mode HUD */
 .drive-hud{position:absolute;z-index:9;top:calc(env(safe-area-inset-top) + var(--s3));
   left:calc(env(safe-area-inset-left) + var(--s3));right:calc(env(safe-area-inset-right) + var(--s3));
-  margin:0 auto;max-width:560px;display:flex;align-items:center;gap:var(--s3);padding:var(--s3) var(--s4);
+  margin:0 auto;max-width:560px;display:flex;align-items:center;gap:var(--s2);padding:var(--s3);
   background:var(--surface);border:2px solid var(--accent);border-radius:var(--r);box-shadow:var(--shadow);animation:up .25s ease-out}
 .drive-hud[hidden]{display:none}
 .hud-icon{width:42px;height:42px;border-radius:12px;background:var(--accent);color:var(--on-accent);display:grid;place-items:center;flex:none}
 .hud-icon svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
 .hud-main{flex:1;min-width:0;display:flex;flex-direction:column}
-.hud-main strong{font-size:1rem;line-height:1.25;overflow-wrap:anywhere}
-.hud-main small{font-size:.8125rem;color:var(--accent);font-weight:700;margin-top:2px}
+.hud-main strong{font-size:.98rem;line-height:1.25;overflow-wrap:anywhere}
+.hud-main small{font-size:.8rem;color:var(--accent);font-weight:700;margin-top:2px}
+#hud-voice[aria-pressed=false]{opacity:.55}
 
 /* Right-side zoom stack */
 .map-tools{position:absolute;z-index:5;right:calc(env(safe-area-inset-right) + var(--s3));
@@ -104,21 +107,23 @@ h1{font-size:1.05rem;line-height:1.25;font-weight:700;letter-spacing:-.01em;whit
 .geo-wrap{margin-top:var(--s3);padding-top:var(--s2);border-top:1px dashed var(--line)}
 .geo-label{font-size:.75rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--accent);margin-bottom:var(--s1)}
 .empty-inline{color:var(--muted);padding:var(--s4);text-align:center;font-size:.9rem}
+.sheet-ver{font-size:.75rem;color:var(--muted);text-align:center;padding:var(--s3) 0 var(--s1);opacity:.8}
 
-/* Category Filter Chips */
+/* Category Filter Chips (44px accessible touch target on mobile) */
 .chips{display:flex;gap:var(--s2);overflow-x:auto;flex:none;padding:2px 0;scrollbar-width:none}
 .chips::-webkit-scrollbar{display:none}
-.chip-btn{flex:none;min-height:38px;padding:0 var(--s3);background:var(--surface);color:var(--ink);border:1px solid var(--line);
+.chip-btn{flex:none;min-height:42px;padding:0 var(--s3);background:var(--surface);color:var(--ink);border:1px solid var(--line);
   border-radius:99px;font-size:.8125rem;font-weight:600;cursor:pointer;transition:background .2s,color .2s,border-color .2s}
 .chip-btn[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
 
-/* In-App Route Card (Zero overlap with install banner or sheet) */
+/* In-App Route Card */
 .route-card{position:absolute;z-index:8;left:var(--s3);right:var(--s3);margin:0 auto;max-width:520px;
   bottom:calc(env(safe-area-inset-bottom) + var(--nav-h) + var(--s4));
   display:grid;gap:var(--s2);padding:var(--s3) var(--s4);background:var(--glass);border:1px solid var(--glass-line);border-radius:var(--r);
   box-shadow:var(--shadow);-webkit-backdrop-filter:blur(18px) saturate(1.5);backdrop-filter:blur(18px) saturate(1.5);animation:up .28s cubic-bezier(.22,1,.36,1)}
 .route-card[hidden]{display:none}
 #app.sheet-open .route-card{visibility:hidden;pointer-events:none}
+#app.drive-on .rc-hide-drive{display:none!important}
 .rc-head{display:flex;align-items:flex-start;gap:var(--s2)}
 .rc-route-title{flex:1;min-width:0}
 .rc-tag{display:inline-block;font-size:.6875rem;font-weight:800;letter-spacing:.05em;color:var(--accent);margin-bottom:2px}
@@ -129,7 +134,7 @@ h1{font-size:1.05rem;line-height:1.25;font-weight:700;letter-spacing:-.01em;whit
 
 .rc-alts{display:flex;gap:var(--s2);overflow-x:auto;scrollbar-width:none}
 .rc-alts[hidden]{display:none}
-.alt-btn{flex:none;min-height:34px;padding:0 var(--s3);border-radius:99px;border:1px solid var(--line);background:var(--surface);font-size:.78rem;font-weight:600;cursor:pointer}
+.alt-btn{flex:none;min-height:36px;padding:0 var(--s3);border-radius:99px;border:1px solid var(--line);background:var(--surface);font-size:.78rem;font-weight:600;cursor:pointer}
 .alt-btn[aria-pressed=true]{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 16%,var(--surface));color:var(--accent)}
 
 .rc-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--s2);padding:var(--s2);background:var(--surface);border:1px solid var(--line);border-radius:14px;font-variant-numeric:tabular-nums}
@@ -171,7 +176,7 @@ h1{font-size:1.05rem;line-height:1.25;font-weight:700;letter-spacing:-.01em;whit
 .icon-btn:hover{background:color-mix(in srgb,var(--accent) 14%,var(--surface))} .icon-btn:active{transform:scale(.95)}
 .icon-btn svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 
-/* Install Prompt — auto-hides when route-card, sheet, or drive-hud is active so zero overlap ever occurs */
+/* Install Prompt — auto-hides when route-card, sheet, or drive-hud is active */
 .install{position:absolute;z-index:7;left:var(--s3);right:var(--s3);margin:0 auto;max-width:500px;
   bottom:calc(env(safe-area-inset-bottom) + var(--nav-h) + var(--s4));
   display:grid;grid-template-columns:auto 1fr;gap:var(--s3);align-items:center;padding:var(--s3) var(--s4);
@@ -206,28 +211,44 @@ h1{font-size:1.05rem;line-height:1.25;font-weight:700;letter-spacing:-.01em;whit
   box-shadow:var(--shadow);transition:opacity .2s,transform .2s}
 .toast.show{opacity:1;transform:translate(-50%,0)}
 
-/* Map Pins, Pulse & Route Polylines */
-.pin-hit{display:grid;place-items:end center;cursor:pointer;background:none;border:0;position:relative}
-.pin-hit svg{position:relative;z-index:2;transition:transform .15s;transform-origin:50% 100%;filter:drop-shadow(0 3px 5px rgba(0,0,0,.45))}
-.pin-hit:hover svg{transform:scale(1.12)}
-.pin-hit.drop svg{animation:drop .45s cubic-bezier(.3,1.4,.5,1) both}
-@keyframes drop{from{transform:translateY(-24px);opacity:0}}
+/* Map Pins, Clusters, Heading Dot & Route Polylines */
+.pin-hit{display:grid;place-items:end center;cursor:pointer;background:none;border:0;position:relative;transition:opacity .2s}
+.pin-hit svg{position:relative;z-index:2;transition:transform .15s;transform-origin:50% 100%;filter:drop-shadow(0 3px 5px rgba(0,0,0,.42))}
+.pin-hit:hover svg,.pin-hit.active svg{transform:scale(1.16)}
+.pin-hit.dimmed{opacity:.52}
+.pin-hit.drop svg{animation:drop .42s cubic-bezier(.3,1.4,.5,1) both}
+@keyframes drop{from{transform:translateY(-20px);opacity:0}}
 .pulse{position:absolute;bottom:4px;left:50%;width:22px;height:22px;margin-left:-11px;border-radius:50%;
   background:rgba(56,189,248,.45);animation:pulseRing 2s ease-out infinite;z-index:1;pointer-events:none}
 @keyframes pulseRing{0%{transform:scale(.6);opacity:.9}100%{transform:scale(2.8);opacity:0}}
-.me-dot{width:20px;height:20px;border-radius:50%;background:#2563eb;border:3px solid #fff;box-shadow:0 0 0 7px rgba(37,99,235,.3)}
 
-.route-glow{stroke:var(--accent);stroke-width:13;stroke-opacity:.25;stroke-linecap:round;stroke-linejoin:round;fill:none}
-.route-casing{stroke:var(--surface);stroke-width:8;stroke-opacity:.95;stroke-linecap:round;stroke-linejoin:round;fill:none}
+/* Cluster Badge */
+.cluster-hit{background:none;border:0;cursor:pointer;display:grid;place-items:center}
+.cluster-badge{width:40px;height:40px;border-radius:50%;background:var(--glass);color:var(--ink);
+  border:2.5px solid var(--accent);box-shadow:0 4px 16px rgba(0,0,0,.45),0 0 0 5px var(--accent-glow);
+  display:grid;place-items:center;font-weight:800;font-size:.875rem;font-variant-numeric:tabular-nums;
+  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);transition:transform .15s}
+.cluster-hit:hover .cluster-badge{transform:scale(1.12)}
+
+/* GPS User Marker with Compass Heading Cone */
+.me-wrap{position:relative;width:36px;height:36px;display:grid;place-items:center}
+.me-cone{position:absolute;inset:0;transform:rotate(var(--heading,0deg));transition:transform .25s ease-out;opacity:var(--has-heading,0)}
+.me-cone::before{content:"";position:absolute;top:-4px;left:50%;margin-left:-12px;border-left:12px solid transparent;border-right:12px solid transparent;border-bottom:18px solid rgba(37,99,235,.45)}
+.me-dot{position:relative;z-index:2;width:18px;height:18px;border-radius:50%;background:#2563eb;border:3px solid #fff;box-shadow:0 0 0 5px rgba(37,99,235,.3)}
+
+.route-glow{stroke:var(--accent);stroke-width:14;stroke-opacity:.26;stroke-linecap:round;stroke-linejoin:round;fill:none}
+.route-casing{stroke:var(--route-casing);stroke-width:8.5;stroke-opacity:.96;stroke-linecap:round;stroke-linejoin:round;fill:none}
 .route-line{stroke:var(--accent);stroke-width:4.5;stroke-linecap:round;stroke-linejoin:round;fill:none}
 .route-line.est{stroke-dasharray:2 10}
-.route-alt{stroke:#64748b;stroke-width:4.5;stroke-opacity:.55;stroke-dasharray:6 8;stroke-linecap:round;stroke-linejoin:round;fill:none;cursor:pointer}
+.route-alt{stroke:#64748b;stroke-width:4.5;stroke-opacity:.5;stroke-dasharray:6 8;stroke-linecap:round;stroke-linejoin:round;fill:none;cursor:pointer}
 
-/* Leaflet Popups & Controls */
+/* Leaflet Popups & Uncramped Attribution */
 .leaflet-container{font-family:var(--font)}
-.leaflet-bottom{margin-bottom:calc(env(safe-area-inset-bottom) + var(--nav-h) + var(--s4))}
-.leaflet-control-attribution{background:var(--glass)!important;color:var(--muted)!important;font-size:.7rem;padding:2px var(--s2);border-radius:8px 0 0 0}
+.leaflet-bottom{margin-bottom:calc(env(safe-area-inset-bottom) + var(--nav-h) + var(--s3))}
+.leaflet-control-attribution{background:var(--glass)!important;color:var(--muted)!important;font-size:.65rem;padding:2px 8px;
+  border-radius:10px 0 0 0;max-width:52vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.75}
 .leaflet-control-attribution a{color:var(--accent)!important}
+@media (max-width:767px){#app.route-on .leaflet-control-attribution{display:none}}
 .leaflet-popup-content-wrapper{background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:var(--r);padding:0;box-shadow:var(--shadow)}
 .leaflet-popup-tip{background:var(--surface)}
 .leaflet-popup-content{margin:0;width:auto!important;min-width:220px}
