@@ -26,6 +26,8 @@
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://githubbest729.github.io/agacmap/assets/og-image.jpg">
+<link rel="preconnect" href="https://tile.openstreetmap.org" crossorigin>
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css">
 <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
@@ -47,7 +49,7 @@
     </div>
     <div id="map-error" class="empty" hidden>
       <h2>Map unavailable</h2>
-      <p>Check your connection or API key. You can still browse all places in the list.</p>
+      <p>You can still browse all places in the list.</p>
       <button class="btn" id="open-list-empty">Open places list</button>
     </div>
   </main>
@@ -91,13 +93,8 @@
 </div>
 
 <noscript><p style="padding:2rem">Algurg Map Locator needs JavaScript.</p></noscript>
+<!-- Leaflet 1.9.4 is bundled locally (vendor/leaflet): no CDN, no API key -->
+<script src="vendor/leaflet/leaflet.js"></script>
 <script src="js/app.js"></script>
-<!-- ====================================================================
-     PASTE YOUR GOOGLE MAPS API KEY: replace YOUR_VALID_API_KEY_HERE below.
-     Key needs: Maps JavaScript API enabled + billing enabled in Google Cloud.
-     Restrict it to HTTP referrer: githubbest729.github.io/*
-     ==================================================================== -->
-<script async defer onerror="window.mapFailed&&window.mapFailed()"
-  src="https://maps.googleapis.com/maps/api/js?key=YOUR_VALID_API_KEY_HERE&callback=initMap&loading=async&libraries=marker&v=weekly"></script>
 </body>
 </html>
