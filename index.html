@@ -4,10 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Algurg Map Locator</title>
-<meta name="description" content="Interactive map of key places around Algurg Automation and Controls, Dubai.">
-<meta name="theme-color" content="#f4f6f8" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#0c1520" media="(prefers-color-scheme: dark)">
-<meta name="color-scheme" content="light dark">
+<meta name="description" content="Interactive 2026 navigation & locator PWA for Algurg Automation and Controls, Jebel Ali, Dubai.">
+<meta id="meta-theme" name="theme-color" content="#0c1520">
+<meta name="color-scheme" content="dark light">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="favicon.ico" sizes="any">
 <link rel="icon" type="image/svg+xml" href="assets/icon.svg">
@@ -19,102 +18,166 @@
 <meta name="format-detection" content="telephone=no">
 <meta property="og:type" content="website">
 <meta property="og:title" content="Algurg Map Locator">
-<meta property="og:description" content="Explore clinics, metro stations, landmarks and more around Algurg Automation and Controls, Dubai.">
+<meta property="og:description" content="Navigate in-app from Algurg Automation and Controls (Jebel Ali) to anywhere in Dubai & UAE.">
 <meta property="og:url" content="https://githubbest729.github.io/agacmap/">
 <meta property="og:image" content="https://githubbest729.github.io/agacmap/assets/og-image.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://githubbest729.github.io/agacmap/assets/og-image.jpg">
-<link rel="preconnect" href="https://a.basemaps.cartocdn.com" crossorigin>
+<link rel="preconnect" href="https://basemaps.cartocdn.com" crossorigin>
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
 <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
 <div id="app">
+  <!-- Top Command Bar -->
   <header class="topbar">
-    <img src="assets/icon.svg" alt="" width="40" height="40" class="logo">
+    <img src="assets/icon.svg" alt="" width="38" height="38" class="logo">
     <div class="titles">
       <h1>Algurg Map Locator</h1>
-      <p id="count">21 places nearby</p>
+      <p id="count">21 places · Jebel Ali HQ</p>
     </div>
     <span id="offline-badge" class="badge" hidden role="status">Offline</span>
+    <button id="theme-toggle" class="icon-btn sm" type="button" aria-label="Switch map theme" title="Switch Light / Dark theme">
+      <svg id="theme-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+    </button>
   </header>
 
+  <!-- Live GPS Drive Mode Top HUD -->
+  <section id="drive-hud" class="drive-hud" hidden aria-label="Active navigation guidance">
+    <div class="hud-icon" id="hud-icon" aria-hidden="true"></div>
+    <div class="hud-main">
+      <strong id="hud-step">Follow route</strong>
+      <small id="hud-meta">Calculating…</small>
+    </div>
+    <button id="hud-stop" class="pill danger" type="button">End</button>
+  </section>
+
+  <!-- Map Stage -->
   <main id="stage">
-    <div id="map" role="application" aria-label="Map of nearby places"></div>
+    <div id="map" role="application" aria-label="Interactive Dubai navigation map"></div>
     <div id="skeleton" class="skeleton" aria-live="polite">
       <div class="shimmer"></div>
-      <p>Loading map…</p>
+      <p>Loading Algurg Map…</p>
     </div>
     <div id="map-error" class="empty" hidden>
       <h2>Map unavailable</h2>
       <p>You can still browse all places in the list.</p>
-      <button class="btn" id="open-list-empty">Open places list</button>
+      <button class="btn" id="open-list-empty" type="button">Open places list</button>
     </div>
   </main>
 
+  <!-- Right-Side Quick Map Controls -->
+  <div class="map-tools" aria-label="Map tools">
+    <button id="tool-zoom-in" class="icon-btn sm" type="button" aria-label="Zoom in" title="Zoom in">+</button>
+    <button id="tool-zoom-out" class="icon-btn sm" type="button" aria-label="Zoom out" title="Zoom out">&minus;</button>
+  </div>
+
+  <!-- Install Prompt (auto-hidden when route card or sheet is open) -->
   <aside id="install" class="install" hidden role="dialog" aria-labelledby="install-title">
     <img src="assets/icon.svg" alt="" width="44" height="44">
     <div>
       <strong id="install-title">Install Algurg Map</strong>
-      <p id="install-text">Add it to your home screen for full-screen, offline-ready access.</p>
+      <p id="install-text">Add it to your home screen for full-screen, offline-ready navigation.</p>
     </div>
-    <button class="btn" id="install-yes">Install</button>
-    <button class="btn ghost" id="install-no" aria-label="Dismiss install prompt">Not now</button>
+    <button class="btn" id="install-yes" type="button">Install</button>
+    <button class="btn ghost" id="install-no" type="button" aria-label="Dismiss install prompt">Not now</button>
   </aside>
 
+  <!-- In-App Route Card -->
   <section id="route-card" class="route-card" hidden aria-label="Route details">
     <div class="rc-head">
-      <p class="rc-names"><span id="rc-from"></span><span aria-hidden="true"> → </span><span id="rc-to"></span></p>
-      <button id="rc-close" class="icon-btn" aria-label="Close route">&times;</button>
+      <div class="rc-route-title">
+        <span class="rc-tag" id="rc-tag">IN-APP ROUTE</span>
+        <p class="rc-names"><span id="rc-from"></span><span aria-hidden="true"> &rarr; </span><span id="rc-to"></span></p>
+      </div>
+      <button id="rc-close" class="icon-btn sm" type="button" aria-label="Close route">&times;</button>
     </div>
+
     <div class="seg" role="group" aria-label="Route direction">
-      <button data-mode="to" aria-pressed="false">To Algurg HQ</button>
-      <button data-mode="from" aria-pressed="true">From Algurg HQ</button>
-      <button data-mode="me" aria-pressed="false">From my location</button>
+      <button type="button" data-mode="to" aria-pressed="false">To Algurg HQ</button>
+      <button type="button" data-mode="from" aria-pressed="true">From Algurg HQ</button>
+      <button type="button" data-mode="me" aria-pressed="false">From my GPS</button>
     </div>
-    <div class="rc-stats"><strong id="rc-km">…</strong><strong id="rc-min">…</strong></div>
+
+    <div id="rc-alts" class="rc-alts" hidden role="group" aria-label="Alternative routes"></div>
+
+    <div class="rc-stats">
+      <div class="stat-box"><strong id="rc-km">&hellip;</strong><span>Distance</span></div>
+      <div class="stat-box"><strong id="rc-min">&hellip;</strong><span>Drive time</span></div>
+      <div class="stat-box accent"><strong id="rc-eta">&hellip;</strong><span>Dubai ETA</span></div>
+    </div>
+
+    <div id="rc-next" class="rc-next" hidden>
+      <span class="next-ico" id="rc-next-ico" aria-hidden="true"></span>
+      <span id="rc-next-txt"></span>
+    </div>
+
     <p id="rc-note" class="rc-note" role="status"></p>
-    <details class="steps"><summary>Turn-by-turn steps</summary><ol id="rc-steps"></ol></details>
+
+    <details class="steps" id="rc-details">
+      <summary>Turn-by-turn directions (<span id="rc-step-count">0</span> steps)</summary>
+      <ol id="rc-steps"></ol>
+    </details>
+
     <div class="rc-actions">
-      <button id="rc-share" class="pill">Share route</button>
-      <a id="rc-ext" class="icon-btn ext" href="#" target="_blank" rel="noopener" aria-label="Open in Google Maps (external)" title="Open in Google Maps (external)">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></a>
+      <button id="rc-drive" class="pill primary" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
+        <span>Start Drive</span>
+      </button>
+      <button id="rc-share" class="pill secondary" type="button">Share</button>
+      <a id="rc-ext" class="icon-btn sm ext" href="#" target="_blank" rel="noopener" aria-label="Open in Google Maps" title="Open in Google Maps">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>
+      </a>
     </div>
   </section>
 
-  <section id="sheet" class="sheet" aria-hidden="true" aria-label="Places list">
-    <div class="grab" aria-hidden="true"></div>
-    <div class="sheet-head"><h2>Closest to Algurg</h2><p id="sheet-sub">Driving distance and time from Algurg, nearest first</p></div>
+  <!-- Places & UAE Anywhere Search Sheet -->
+  <section id="sheet" class="sheet" aria-hidden="true" aria-label="Places and Dubai search">
+    <button type="button" class="grab-btn" id="sheet-grab" aria-label="Toggle places list"><span class="grab"></span></button>
+    <div class="sheet-head">
+      <h2>Navigate from Algurg</h2>
+      <p id="sheet-sub">Driving distance and time from Jebel Ali HQ, nearest first</p>
+    </div>
     <div id="chips" class="chips" role="group" aria-label="Filter by category"></div>
-    <label class="search">
-      <span class="sr">Search places</span>
-      <input id="q" type="search" placeholder="Search places or categories" autocomplete="off" enterkeyhint="search">
-    </label>
-    <ul id="list" class="list"></ul>
-    <p id="no-results" class="empty-inline" hidden>No places match. Try a different word, like “clinic” or “metro”.</p>
+    <div class="search-wrap">
+      <label class="search">
+        <span class="sr">Search preset places or any address in Dubai &amp; UAE</span>
+        <input id="q" type="search" placeholder="Search places or any Dubai address…" autocomplete="off" enterkeyhint="search">
+      </label>
+      <button id="q-clear" class="icon-btn sm" type="button" hidden aria-label="Clear search">&times;</button>
+    </div>
+    <div class="sheet-scroll">
+      <ul id="list" class="list"></ul>
+      <div id="geo-wrap" class="geo-wrap" hidden>
+        <p class="geo-label" id="geo-label">Dubai &amp; UAE Locations</p>
+        <ul id="geo-list" class="list"></ul>
+      </div>
+      <p id="no-results" class="empty-inline" hidden>No matching places. Try typing a street, mall, or company in Dubai, or tap anywhere on the map.</p>
+    </div>
   </section>
 
+  <!-- Floating Glass Dock -->
   <nav class="bottomnav" aria-label="Map actions">
-    <button id="nav-list" aria-pressed="false">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg><span>Places</span>
+    <button id="nav-list" type="button" aria-pressed="false">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span>Places</span>
     </button>
-    <button id="nav-fit">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" /></svg><span>Show all</span>
+    <button id="nav-fit" type="button">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg><span>Show all</span>
     </button>
-    <button id="nav-hq">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg><span>Algurg</span>
+    <button id="nav-hq" type="button">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg><span>Algurg HQ</span>
     </button>
-    <button id="nav-locate">
+    <button id="nav-locate" type="button">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s7-6.3 7-12a7 7 0 1 0-14 0c0 5.7 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/></svg><span>Near me</span>
     </button>
   </nav>
+
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 </div>
 
-<noscript><p style="padding:2rem">Algurg Map Locator needs JavaScript.</p></noscript>
-<!-- Leaflet 1.9.4 is bundled locally (vendor/leaflet): no CDN, no API key -->
+<noscript><p style="padding:2rem">Algurg Map Locator needs JavaScript enabled.</p></noscript>
 <script src="vendor/leaflet/leaflet.js"></script>
 <script src="js/app.js"></script>
 </body>
