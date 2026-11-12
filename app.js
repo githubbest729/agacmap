@@ -1,10 +1,7 @@
 'use strict';
-/* Algurg Map Locator (Leaflet + OpenStreetMap: no API key or billing needed). POI coordinates come from the supplied Google Plus Codes (decoded to ~14 m cells)
+/* Algurg Map Locator (Leaflet + CARTO/OpenStreetMap tiles: no API key or billing needed). POI coordinates come from the supplied Google Plus Codes (decoded to ~14 m cells)
    or exact Google Maps URL values (Aster Medical Center, Atlantis Monorail, Aster Clinic Al Barsha). */
-/* >>> PASTE ALGURG'S EXACT LAT/LNG ON THE NEXT LINE (replace 25.0990 and 55.1640). <<<
-   How: open Algurg in Google Maps, right-click its pin, click the "lat, lng" numbers at the top of the menu to copy.
-   NOTE: https://maps.app.goo.gl/zwPVNuzgspFVWzuF8 opens "Dubai World Trade Centre" (25.2233459, 55.2869344),
-   not Algurg, so it was NOT used. All distances are measured from this point.
+/* Algurg Automation and Controls, Corporate Office, Jebel Ali (exact coordinates).
    Temporary test override: add ?hq=25.1234,55.1234 to the page URL. */
 const HQ = { name: 'Algurg Automation and Controls', lat: 24.9999384, lng: 55.1300456 };
 (() => { const o = new URLSearchParams(location.search).get('hq'); if (o) { const [a, b] = o.split(',').map(Number);
@@ -53,7 +50,38 @@ const PLACES = [
 ];
 
 PLACES.forEach(p => { p.km = haversineKm(HQ, p); });
-PLACES.sort((a, b) => a.km - b.km); // closest first; list and markers share this order
+PLACES.sort((a, b) => a.km - b.km); // fixed marker order; the list order is `order` below
+
+/* ---------- Driving distance & time (OSRM public demo server: free, no key, fair-use only) ---------- */
+const ROUTER = 'https://router.project-osrm.org';
+const ROAD_FACTOR = 1.3, AVG_KMH = 50;      // used for estimates until/unless real road data arrives
+const DRIVE_KEY = `algurgDrive:${HQ.lat},${HQ.lng}`;
+const road = p => p.drive || { km: p.km * ROAD_FACTOR, min: Math.max(1, Math.round(p.km * ROAD_FACTOR / AVG_KMH * 60)), est: true };
+const fmtMin = m => m < 60 ? `${m} min` : `${Math.floor(m / 60)} hr${m % 60 ? ' ' + (m % 60) + ' min' : ''}`;
+let order = PLACES.map((_, i) => i);
+function resort() { order.sort((a, b) => { const x = road(PLACES[a]), y = road(PLACES[b]); return x.km - y.km || x.min - y.min; }); }
+function saveDrive() {
+  try { const o = {}; PLACES.forEach(p => { if (p.drive) o[p.name] = p.drive; }); localStorage.setItem(DRIVE_KEY, JSON.stringify(o)); } catch {}
+}
+function loadSavedDrive() {
+  try { const o = JSON.parse(localStorage.getItem(DRIVE_KEY) || '{}'); PLACES.forEach(p => { if (o[p.name]) p.drive = o[p.name]; }); } catch {}
+}
+loadSavedDrive(); resort();
+
+/* ---------- Map tile provider (pick one; all render English/Latin labels) ----------
+   'carto'  : CARTO Voyager. No key. Check CARTO's terms before commercial use.
+   'osm'    : OpenStreetMap standard. No key, light use only, but labels are Arabic in Dubai.
+   'stadia' : Stadia Alidade Smooth. Needs a Stadia account + your domain registered (domain auth); free plan is NON-commercial,
+              commercial use needs a paid plan. Without a registered domain its tiles return 401 errors. */
+const TILE_PROVIDER = 'carto';
+const OSM_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors';
+const TILE_PROVIDERS = {
+  carto:  { url: 'https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png?key=cb1_57cr_1_f31ce75418c7d6e7e9f3426f', opts: { subdomains: 'abcd', maxZoom: 20 },
+            attr: OSM_ATTR + ' &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>' },
+  osm:    { url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', opts: { maxZoom: 19 }, attr: OSM_ATTR },
+  stadia: { url: 'https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png', opts: { maxZoom: 20 },
+            attr: '&copy; <a href="https://stadiamaps.com/" target="_blank" rel="noopener">Stadia Maps</a> &copy; <a href="https://openmaptiles.org/" target="_blank" rel="noopener">OpenMapTiles</a> ' + OSM_ATTR }
+};
 
 const $ = id => document.getElementById(id);
 let map, markers = [], hqMarker, mapReady = false, userMarker;
@@ -70,14 +98,15 @@ const esc = s => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '
 function renderList(filter = '') {
   const f = filter.trim().toLowerCase();
   const ul = $('list'); ul.innerHTML = '';
-  const items = PLACES.map((p, i) => ({ p, i })).filter(({ p }) =>
+  const items = order.map((i, n) => ({ p: PLACES[i], i, n })).filter(({ p }) =>
     !f || (p.name + ' ' + p.type + ' ' + CATS[p.cat].label).toLowerCase().includes(f));
-  items.forEach(({ p, i }) => {
+  items.forEach(({ p, i, n }) => {
     const li = document.createElement('li');
+    li.style.setProperty('--i', Math.min(n, 16));
     li.innerHTML = `<button class="item" data-i="${i}">
       <span class="dot" style="background:${CATS[p.cat].color}" aria-hidden="true"></span>
       <span class="txt"><strong>${esc(p.name)}</strong><small>${CATS[p.cat].label} · ${esc(p.type)}</small></span>
-      <span class="km">${fmtKm(p.km)}</span></button>`;
+      <span class="km"><b>${road(p).est ? '~' : ''}${fmtKm(road(p).km)}</b><i>${road(p).est ? '~' : ''}${fmtMin(road(p).min)}</i></span></button>`;
     ul.appendChild(li);
   });
   $('no-results').hidden = items.length > 0;
@@ -88,28 +117,33 @@ function toggleSheet(open) {
   const s = $('sheet'); const on = open ?? !s.classList.contains('open');
   s.classList.toggle('open', on); s.setAttribute('aria-hidden', String(!on));
   $('nav-list').setAttribute('aria-pressed', String(on));
-  if (on) setTimeout(() => $('q').focus({ preventScroll: true }), 300);
+  if (on) {
+    const l = $('list'); l.classList.remove('stagger'); void l.offsetWidth; l.classList.add('stagger'); // restart cascade
+    setTimeout(() => l.classList.remove('stagger'), 1400);
+    setTimeout(() => $('q').focus({ preventScroll: true }), 300);
+  }
 }
 
 /* ---------- Map ---------- */
 function popupHTML(p, isHQ) {
   const col = isHQ ? '#0b6e8a' : CATS[p.cat].color;
-  const dir = `https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}`;
+  const dir = `https://www.google.com/maps/dir/?api=1&origin=${HQ.lat},${HQ.lng}&destination=${p.lat},${p.lng}&travelmode=driving`;
+  const d = isHQ ? null : road(p);
   return `<div class="iw"><span class="chip" style="background:${col}">${isHQ ? 'Headquarters' : CATS[p.cat].label}</span>
-    <h2>${esc(p.name)}</h2><p>${isHQ ? 'Algurg office · centre of this map' : esc(p.type)}</p>
-    ${isHQ ? '' : `<p class="away">${fmtKm(p.km)} away <span>(straight line)</span></p>`}
-    <a href="${dir}" target="_blank" rel="noopener">Get directions</a></div>`;
+    <h2>${esc(p.name)}</h2><p>${isHQ ? 'Corporate Office · Jebel Ali' : esc(p.type)}</p>
+    ${isHQ ? '' : `<p class="away">From Algurg: ${d.est ? '~' : ''}${fmtKm(d.km)} · ~${fmtMin(d.min)} drive <span>(${d.est ? 'estimate' : 'by road'})</span></p>`}
+    <a href="${dir}" target="_blank" rel="noopener">${isHQ ? 'Open in Google Maps' : 'Get directions from Algurg'}</a></div>`;
 }
+const POPUP_OPTS = { maxWidth: 260, autoPanPaddingTopLeft: [16, 90], autoPanPaddingBottomRight: [16, 110] };
+const refreshPopups = () => markers.forEach((m, i) => m && m.setPopupContent(popupHTML(PLACES[i])));
 
 /* ---------- Map (Leaflet + OpenStreetMap) ---------- */
 const flyTo = (ll, z) => reduceMotion ? map.setView(ll, z, { animate: false }) : map.flyTo(ll, z, { duration: 0.8 });
 
 function focusPlace(i) {
-  const p = PLACES[i], m = markers[i];
-  if (!mapReady || !m) { toast(p.name); return; }
+  if (!mapReady || !markers[i]) { toast(PLACES[i].name); return; }
   toggleSheet(false);
-  flyTo([p.lat, p.lng], Math.max(map.getZoom(), 14));
-  m.openPopup();
+  showRoute(i);
 }
 
 // Fit the viewport to Algurg + every place, leaving room for the top bar and bottom nav
@@ -122,13 +156,76 @@ function fitAll() {
 }
 
 // Coloured SVG pin inside a >=44px tap area (animation lives on the inner svg so Leaflet's positioning isn't disturbed)
-function pinIcon(color, scale = 1) {
+function pinIcon(color, scale = 1, pulse = false) {
   const w = Math.round(32 * scale), h = Math.round(40 * scale), bw = Math.max(w, 44), bh = Math.max(h, 44);
   return L.divIcon({
     className: 'pin-hit' + (reduceMotion ? '' : ' drop'),
     iconSize: [bw, bh], iconAnchor: [bw / 2, bh], popupAnchor: [0, -h + 4],
-    html: `<svg width="${w}" height="${h}" viewBox="0 0 32 40" aria-hidden="true"><path d="M16 39C16 39 2 24 2 14a14 14 0 0 1 28 0c0 10-14 25-14 25z" fill="${color}" stroke="#fff" stroke-width="2.5"/><circle cx="16" cy="14" r="5" fill="#fff"/></svg>`
+    html: `${pulse ? '<span class="pulse" aria-hidden="true"></span>' : ''}<svg width="${w}" height="${h}" viewBox="0 0 32 40" aria-hidden="true"><path d="M16 39C16 39 2 24 2 14a14 14 0 0 1 28 0c0 10-14 25-14 25z" fill="${color}" stroke="#fff" stroke-width="2.5"/><circle cx="16" cy="14" r="5" fill="#fff"/></svg>`
   });
+}
+
+/* ---------- Route line (OSRM) ---------- */
+let routeGroup, routeSeq = 0;
+const routeCache = {};
+async function fetchJSON(url) {
+  const ac = new AbortController(), t = setTimeout(() => ac.abort(), 9000);
+  try { const r = await fetch(url, { signal: ac.signal }); if (!r.ok) throw new Error('HTTP ' + r.status); return await r.json(); }
+  finally { clearTimeout(t); }
+}
+function setDrive(p, km, min, est) {
+  p.drive = { km, min, est }; resort(); renderList($('q').value); refreshPopups(); saveDrive();
+}
+function drawRoute(latlngs, est) {
+  routeGroup.clearLayers();
+  L.polyline(latlngs, { className: 'route-casing', interactive: false }).addTo(routeGroup);
+  L.polyline(latlngs, { className: 'route-line' + (est ? ' est' : ''), interactive: false }).addTo(routeGroup);
+}
+function fitRoute(latlngs) {
+  const bar = document.querySelector('.bottomnav').offsetHeight + 12;
+  map.fitBounds(L.latLngBounds(latlngs), { paddingTopLeft: [24, 90], paddingBottomRight: [24, bar + 24], maxZoom: 15, animate: false });
+}
+function clearRoute() {
+  routeSeq++; routeGroup?.clearLayers(); $('clear-route').hidden = true; map?.closePopup();
+}
+async function showRoute(i) {
+  if (!mapReady) return;
+  const p = PLACES[i], seq = ++routeSeq;
+  $('clear-route').hidden = false;
+  let line = routeCache[i];
+  if (!line) {
+    const straight = [[HQ.lat, HQ.lng], [p.lat, p.lng]];   // dashed placeholder while the road route loads
+    drawRoute(straight, true); fitRoute(straight); markers[i].openPopup();
+    try {
+      const j = await fetchJSON(`${ROUTER}/route/v1/driving/${HQ.lng},${HQ.lat};${p.lng},${p.lat}?overview=full&geometries=geojson`);
+      const r = j.routes && j.routes[0]; if (!r) throw new Error('no route');
+      line = routeCache[i] = r.geometry.coordinates.map(([lng, lat]) => [lat, lng]);
+      setDrive(p, r.distance / 1000, Math.max(1, Math.round(r.duration / 60)), false);
+    } catch (e) { console.warn('Route failed', e); toast('Road route unavailable. Showing a straight line.'); return; }
+    if (seq !== routeSeq) return;                           // user picked something else meanwhile
+  }
+  drawRoute(line, false); fitRoute(line); markers[i].openPopup();
+}
+
+// One request for all 21 road distances + times
+async function loadDriving() {
+  const sub = $('sheet-sub');
+  try {
+    const coords = [HQ, ...PLACES].map(q => `${q.lng},${q.lat}`).join(';');
+    const j = await fetchJSON(`${ROUTER}/table/v1/driving/${coords}?sources=0&annotations=duration,distance`);
+    const dur = j.durations && j.durations[0], dist = j.distances && j.distances[0];
+    if (!dur) throw new Error('no durations');
+    PLACES.forEach((p, k) => {
+      if (dur[k + 1] == null) return;
+      const m = dist && dist[k + 1];
+      p.drive = { min: Math.max(1, Math.round(dur[k + 1] / 60)), km: m != null ? m / 1000 : p.km * ROAD_FACTOR, est: m == null };
+    });
+    sub.textContent = 'Driving distance and time from Algurg, nearest first';
+  } catch (e) {
+    console.warn('Driving data unavailable', e);
+    sub.textContent = PLACES.some(p => p.drive) ? 'Saved driving data, nearest first' : 'Estimates (straight line × 1.3), nearest first';
+  }
+  resort(); renderList($('q').value); refreshPopups(); saveDrive();
 }
 
 function initMap() {
@@ -138,25 +235,25 @@ function initMap() {
       zoomAnimation: !reduceMotion, fadeAnimation: !reduceMotion, markerZoomAnimation: !reduceMotion });
     L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-    const tiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19, crossOrigin: true,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors'
-    }).addTo(map);
+    const T = TILE_PROVIDERS[TILE_PROVIDER];
+    const tiles = L.tileLayer(T.url, { crossOrigin: true, attribution: T.attr, ...T.opts }).addTo(map);
     const hideSkeleton = () => $('skeleton').classList.add('done');
     tiles.once('load', hideSkeleton); setTimeout(hideSkeleton, 6000);
     let warned = false;
     tiles.on('tileerror', () => { if (!warned) { warned = true; toast(navigator.onLine ? 'Some map tiles failed to load' : 'Offline: showing saved map areas only'); } });
 
-    hqMarker = L.marker([HQ.lat, HQ.lng], { icon: pinIcon('#0b6e8a', 1.5), title: HQ.name, alt: HQ.name, zIndexOffset: 1000 })
-      .addTo(map).bindPopup(popupHTML(HQ, true), { maxWidth: 260 });
-    markers = PLACES.map(p => {
+    routeGroup = L.layerGroup().addTo(map);
+    hqMarker = L.marker([HQ.lat, HQ.lng], { icon: pinIcon('#0b6e8a', 1.5, true), title: HQ.name, alt: HQ.name, zIndexOffset: 1000 })
+      .addTo(map).bindPopup(popupHTML(HQ, true), POPUP_OPTS);
+    markers = PLACES.map((p, i) => {
       try {
         return L.marker([p.lat, p.lng], { icon: pinIcon(CATS[p.cat].color), title: p.name, alt: p.name })
-          .addTo(map).bindPopup(popupHTML(p), { maxWidth: 260 });
+          .addTo(map).bindPopup(popupHTML(p), POPUP_OPTS).on('click', () => showRoute(i));
       } catch (e) { console.warn('Marker failed:', p.name, e); return null; }
     });
     mapReady = true;
     fitAll();
+    loadDriving();
     addEventListener('resize', () => { map.invalidateSize(); setTimeout(fitAll, 250); });
   } catch (err) { console.error(err); window.mapFailed(); }
 }
@@ -186,9 +283,10 @@ function locate() {
 
 $('nav-list').onclick = () => toggleSheet();
 $('open-list-empty').onclick = () => toggleSheet(true);
-$('nav-fit').onclick = () => { toggleSheet(false); fitAll(); };
-$('nav-hq').onclick = () => { if (!mapReady) return; toggleSheet(false); flyTo([HQ.lat, HQ.lng], 15); hqMarker.openPopup(); };
+$('nav-fit').onclick = () => { toggleSheet(false); clearRoute(); fitAll(); };
+$('nav-hq').onclick = () => { if (!mapReady) return; toggleSheet(false); clearRoute(); flyTo([HQ.lat, HQ.lng], 15); hqMarker.openPopup(); };
 $('nav-locate').onclick = locate;
+$('clear-route').onclick = () => { clearRoute(); fitAll(); };
 $('q').addEventListener('input', e => renderList(e.target.value));
 $('list').addEventListener('click', e => { const b = e.target.closest('.item'); if (b) focusPlace(+b.dataset.i); });
 addEventListener('keydown', e => { if (e.key === 'Escape') toggleSheet(false); });
