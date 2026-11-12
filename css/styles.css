@@ -54,9 +54,8 @@ h1{font-size:1.05rem;line-height:1.25;font-weight:700;letter-spacing:-.01em;whit
 .hud-main{flex:1;min-width:0;display:flex;flex-direction:column}
 .hud-main strong{font-size:.98rem;line-height:1.25;overflow-wrap:anywhere}
 .hud-main small{font-size:.8rem;color:var(--accent);font-weight:700;margin-top:2px}
-#hud-voice[aria-pressed=false]{opacity:.55}
 
-/* Right-side zoom stack */
+/* Right-side zoom & recenter stack */
 .map-tools{position:absolute;z-index:5;right:calc(env(safe-area-inset-right) + var(--s3));
   top:calc(env(safe-area-inset-top) + 84px);display:flex;flex-direction:column;gap:var(--s2)}
 #app.sheet-open .map-tools{opacity:.35;pointer-events:none}
@@ -81,7 +80,7 @@ h1{font-size:1.05rem;line-height:1.25;font-weight:700;letter-spacing:-.01em;whit
   background:var(--glass);border:1px solid var(--glass-line);border-bottom:0;border-radius:24px 24px 0 0;box-shadow:var(--shadow);
   -webkit-backdrop-filter:blur(20px) saturate(1.5);backdrop-filter:blur(20px) saturate(1.5);
   display:flex;flex-direction:column;gap:var(--s2);transform:translateY(105%);visibility:hidden;
-  transition:transform .3s cubic-bezier(.22,1,.36,1),visibility 0s .3s}
+  transition:transform .3s cubic-bezier(.22,1,.36,1),visibility 0s .3s;view-transition-name:places-sheet}
 .sheet.open{transform:none;visibility:visible;transition:transform .3s cubic-bezier(.22,1,.36,1)}
 .grab-btn{background:none;border:0;padding:var(--s2) 0 var(--s1);cursor:pointer;display:grid;place-items:center;flex:none}
 .grab{width:42px;height:4px;border-radius:99px;background:var(--line)}
@@ -120,7 +119,8 @@ h1{font-size:1.05rem;line-height:1.25;font-weight:700;letter-spacing:-.01em;whit
 .route-card{position:absolute;z-index:8;left:var(--s3);right:var(--s3);margin:0 auto;max-width:520px;
   bottom:calc(env(safe-area-inset-bottom) + var(--nav-h) + var(--s4));
   display:grid;gap:var(--s2);padding:var(--s3) var(--s4);background:var(--glass);border:1px solid var(--glass-line);border-radius:var(--r);
-  box-shadow:var(--shadow);-webkit-backdrop-filter:blur(18px) saturate(1.5);backdrop-filter:blur(18px) saturate(1.5);animation:up .28s cubic-bezier(.22,1,.36,1)}
+  box-shadow:var(--shadow);-webkit-backdrop-filter:blur(18px) saturate(1.5);backdrop-filter:blur(18px) saturate(1.5);
+  animation:up .28s cubic-bezier(.22,1,.36,1);view-transition-name:route-card}
 .route-card[hidden]{display:none}
 #app.sheet-open .route-card{visibility:hidden;pointer-events:none}
 #app.drive-on .rc-hide-drive{display:none!important}
@@ -241,6 +241,23 @@ h1{font-size:1.05rem;line-height:1.25;font-weight:700;letter-spacing:-.01em;whit
 .route-line{stroke:var(--accent);stroke-width:4.5;stroke-linecap:round;stroke-linejoin:round;fill:none}
 .route-line.est{stroke-dasharray:2 10}
 .route-alt{stroke:#64748b;stroke-width:4.5;stroke-opacity:.5;stroke-dasharray:6 8;stroke-linecap:round;stroke-linejoin:round;fill:none;cursor:pointer}
+
+/* Priority 3: Compass Map Rotation, Recenter & Voice Button */
+#map{transition:transform .25s ease-out;transform-origin:50% 50%}
+#map.map-rotated{transform:scale(1.45) rotate(var(--map-rot,0deg))}
+#map.map-rotated .pin-hit svg,
+#map.map-rotated .cluster-badge,
+#map.map-rotated .leaflet-popup-content-wrapper{transform:rotate(calc(-1 * var(--map-rot,0deg)))}
+#map.map-rotated .pin-hit:hover svg,
+#map.map-rotated .pin-hit.active svg{transform:rotate(calc(-1 * var(--map-rot,0deg))) scale(1.16)}
+
+.recenter-btn{display:none;color:var(--accent)}
+#app.drive-on .recenter-btn{display:inline-grid}
+.recenter-btn[aria-pressed=true]{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+
+.voice-btn{min-height:38px;padding:0 var(--s3);font-size:.78rem;gap:5px;flex:none}
+.voice-btn svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.voice-btn[aria-pressed=true]{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
 
 /* Leaflet Popups & Uncramped Attribution */
 .leaflet-container{font-family:var(--font)}

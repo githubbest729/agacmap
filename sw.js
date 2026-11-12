@@ -1,4 +1,4 @@
-const VERSION = 'algurg-map-v14';
+const VERSION = 'algurg-map-v15';
 const TILES = 'algurg-tiles-v7';
 const CARTO_KEY = 'cb1_57cr_1_f31ce75418c7d6e7e9f3426f';
 

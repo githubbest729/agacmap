@@ -1,8 +1,9 @@
 'use strict';
-/* Algurg Map Locator & In-App Navigator (v14 — 2026 English Edition)
+/* Algurg Map Locator & In-App Navigator (v15 — Priority 3 Complete)
+   - Live GPS Follow + DeviceOrientation Compass Rotation + Manual Pan Pause & Recenter
+   - View Transitions API for Places Sheet & Route Card with reduced-motion fallback
+   - Optional Web Speech API Voice Guidance (OFF by default, Drive mode only)
    - Zero-dependency Marker Clustering + Active Destination Spotlight
-   - Auto-collapsing Places Sheet & Clean Drive Mode Layout
-   - Live GPS Compass Heading + Optional Web Speech API Voice Guidance
    - CARTO Dark Matter (dark_all) & Positron (light_all) English Map Tiles + CARTO Basemaps API Key
    - Free keyless OSRM Routing + UAE Arabic-to-English Street Translator + Photon UAE Geocoding */
 
@@ -277,10 +278,8 @@ function applyTheme(theme) {
 }
 applyTheme(currentTheme);
 
-/* ---------- Web Speech API Voice Guidance ---------- */
-let voiceEnabled = (() => {
-  try { return localStorage.getItem('algurgVoice') !== '0'; } catch { return true; }
-})();
+/* ---------- Web Speech API Voice Guidance (OFF by default, Drive mode only) ---------- */
+let voiceEnabled = false;
 let lastSpokenText = '';
 
 function updateVoiceUI() {
@@ -294,7 +293,7 @@ function updateVoiceUI() {
 updateVoiceUI();
 
 function speakTurn(text, force = false) {
-  if (!voiceEnabled || !text || typeof window.speechSynthesis !== 'object') return;
+  if (!voiceEnabled || followMode !== 'drive' || !text || !('speechSynthesis' in window)) return;
   if (!force && text === lastSpokenText) return;
   lastSpokenText = text;
   try {
@@ -452,7 +451,6 @@ function updateClusters() {
   const radiusPx = zoom >= 14 ? 0 : (zoom >= 12.5 ? 38 : 50);
   const visited = new Set();
 
-  // Filter markers by active category chip
   const candidates = [];
   PLACES.forEach((p, i) => {
     if (!markers[i]) return;
@@ -465,7 +463,6 @@ function updateClusters() {
     const p = PLACES[i];
     const m = markers[i];
 
-    // Keep active route destination always unclustered and highlighted
     if (activeTarget === i || radiusPx === 0) {
       visited.add(i);
       const cls = activeTarget === i ? 'active' : (activeTarget !== null ? 'dimmed' : '');
@@ -541,10 +538,16 @@ function fitAll() {
   map.fitBounds(b, { paddingTopLeft: [24, 90], paddingBottomRight: [24, bar + 20], animate: !reduceMotion });
 }
 
-/* ---------- In-App Routing, Alternatives, Maneuver Icons & Live GPS Drive ---------- */
+/* ---------- In-App Routing, Alternatives, Live GPS Follow & Compass Heading ---------- */
 let routeGroup, routeSeq = 0, routeMode = 'from', activeTarget = null, activeRoutes = [], activeAltIdx = 0;
-let customDest = null, userPos = null, driveWatchId = null;
+let customDest = null, userPos = null;
 const routeCache = {};
+
+let followMode = null;     // 'near' | 'drive' | null
+let isFollowing = false;
+let gpsWatchId = null;
+let compassHandler = null;
+let driveStepIdx = 0;
 
 async function fetchJSON(url) {
   const ac = new AbortController(), t = setTimeout(() => ac.abort(), 9500);
@@ -602,6 +605,74 @@ function updateUserDot(c) {
     wrap.style.setProperty('--heading', `${c.heading}deg`);
     wrap.style.setProperty('--has-heading', '1');
   }
+}
+
+function setMapRotation(deg) {
+  const mapEl = $('map');
+  if (!mapEl) return;
+  if (typeof deg === 'number' && isFinite(deg) && isFollowing) {
+    const norm = ((deg % 360) + 360) % 360;
+    mapEl.style.setProperty('--map-rot', `${-Math.round(norm)}deg`);
+    mapEl.classList.add('map-rotated');
+    const wrap = $('me-wrap');
+    if (wrap) {
+      wrap.style.setProperty('--heading', `${Math.round(norm)}deg`);
+      wrap.style.setProperty('--has-heading', '1');
+    }
+  } else {
+    mapEl.style.setProperty('--map-rot', '0deg');
+    mapEl.classList.remove('map-rotated');
+  }
+}
+
+function onDeviceOrientation(e) {
+  if (!isFollowing) return;
+  let heading = null;
+  if (typeof e.webkitCompassHeading === 'number' && isFinite(e.webkitCompassHeading)) {
+    heading = e.webkitCompassHeading;
+  } else if (e.absolute === true && typeof e.alpha === 'number' && isFinite(e.alpha)) {
+    heading = (360 - e.alpha) % 360;
+  }
+  if (heading !== null) setMapRotation(heading);
+}
+
+async function startCompass() {
+  if (compassHandler || typeof DeviceOrientationEvent === 'undefined') return;
+  try {
+    if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+      const res = await DeviceOrientationEvent.requestPermission();
+      if (res !== 'granted') return;
+    }
+    compassHandler = onDeviceOrientation;
+    addEventListener('deviceorientationabsolute', compassHandler, true);
+    addEventListener('deviceorientation', compassHandler, true);
+  } catch {}
+}
+
+function stopCompass() {
+  if (compassHandler) {
+    removeEventListener('deviceorientationabsolute', compassHandler, true);
+    removeEventListener('deviceorientation', compassHandler, true);
+    compassHandler = null;
+  }
+  setMapRotation(null);
+}
+
+function setFollowActive(active) {
+  isFollowing = active;
+  const btn = $('tool-recenter');
+  if (btn) btn.setAttribute('aria-pressed', String(active));
+  if (!active) setMapRotation(null);
+}
+
+function stopGpsFollow() {
+  if (gpsWatchId !== null) {
+    navigator.geolocation.clearWatch(gpsWatchId);
+    gpsWatchId = null;
+  }
+  stopCompass();
+  followMode = null;
+  setFollowActive(false);
 }
 
 function targetObj(t) {
@@ -672,12 +743,86 @@ function fitRoute(latlngs) {
   });
 }
 
-function stopDriveMode(silent = false) {
-  if (driveWatchId !== null) {
-    navigator.geolocation.clearWatch(driveWatchId);
-    driveWatchId = null;
+function updateDriveProgress(c) {
+  if (followMode !== 'drive' || activeTarget === null || !activeRoutes[activeAltIdx]) return;
+  const dest = endpoints(activeTarget, routeMode)[1];
+  const rt = activeRoutes[activeAltIdx];
+  const steps = rt.steps || [];
+
+  while (driveStepIdx < steps.length - 1) {
+    const loc = steps[driveStepIdx].maneuver && steps[driveStepIdx].maneuver.location;
+    if (!loc) break;
+    const distToTurnKm = haversineKm(c, { lat: loc[1], lng: loc[0] });
+    if (distToTurnKm < 0.045) driveStepIdx++;
+    else break;
   }
+
+  const activeStep = steps[driveStepIdx];
+  if (activeStep) {
+    const instruction = stepText(activeStep);
+    $('hud-icon').innerHTML = maneuverSVG(activeStep.maneuver);
+    $('hud-step').textContent = instruction;
+    speakTurn(instruction);
+  }
+
+  const remKm = haversineKm(c, dest) * ROAD_FACTOR;
+  const remMin = Math.max(1, Math.round(remKm / AVG_KMH * 60));
+  if (remKm < 0.07) {
+    const msg = `Arrived at ${dest.name}`;
+    $('hud-step').textContent = msg;
+    $('hud-meta').textContent = 'Destination reached';
+    toast(msg);
+    speakTurn(msg, true);
+    stopDriveMode(true);
+  } else {
+    $('rc-km').textContent = fmtKm(remKm);
+    $('rc-min').textContent = fmtMin(remMin);
+    $('rc-eta').textContent = fmtDubaiETA(remMin);
+    $('hud-meta').textContent = `${fmtKm(remKm)} left · ~${fmtMin(remMin)} · ETA ${fmtDubaiETA(remMin)}`;
+  }
+}
+
+function startGpsFollow(mode, zoomTarget = null) {
+  if (!navigator.geolocation) {
+    toast('GPS tracking is not supported on this device.');
+    return;
+  }
+  if (gpsWatchId !== null) {
+    navigator.geolocation.clearWatch(gpsWatchId);
+    gpsWatchId = null;
+  }
+  followMode = mode;
+  setFollowActive(true);
+  startCompass();
+
+  let firstFix = true;
+  gpsWatchId = navigator.geolocation.watchPosition(
+    pos => {
+      const c = { lat: pos.coords.latitude, lng: pos.coords.longitude, heading: pos.coords.heading, t: Date.now() };
+      userPos = c;
+      updateUserDot(c);
+      if (!compassHandler && typeof c.heading === 'number' && isFinite(c.heading)) {
+        setMapRotation(c.heading);
+      }
+      if (isFollowing) {
+        if (firstFix && zoomTarget) flyTo([c.lat, c.lng], zoomTarget);
+        else map.panTo([c.lat, c.lng], { animate: !reduceMotion });
+      }
+      firstFix = false;
+      if (followMode === 'drive') updateDriveProgress(c);
+    },
+    () => {
+      if (firstFix) toast('Waiting for GPS signal…');
+    },
+    { enableHighAccuracy: true, maximumAge: 2500, timeout: 10000 }
+  );
+}
+
+function stopDriveMode(silent = false) {
+  if (followMode === 'drive') stopGpsFollow();
   try { window.speechSynthesis?.cancel(); } catch {}
+  lastSpokenText = '';
+  driveStepIdx = 0;
   $('drive-hud').hidden = true;
   $('app').classList.remove('drive-on');
   $('rc-drive-lbl').textContent = 'Start Drive';
@@ -690,8 +835,13 @@ function clearRoute() {
   activeTarget = null;
   activeRoutes = [];
   routeGroup?.clearLayers();
-  $('route-card').hidden = true;
-  $('app').classList.remove('route-on');
+  const card = $('route-card');
+  if (!card.hidden) {
+    viewTransition(() => {
+      card.hidden = true;
+      $('app').classList.remove('route-on');
+    });
+  }
   map?.closePopup();
   updateClusters();
 }
@@ -743,15 +893,22 @@ function paintCard(t, mode, o, d, r, note) {
   ).join('');
 
   $('rc-ext').href = `https://www.google.com/maps/dir/?api=1&origin=${o.lat},${o.lng}&destination=${d.lat},${d.lng}&travelmode=driving`;
-  card.hidden = false;
-  $('app').classList.add('route-on');
+  if (card.hidden) {
+    viewTransition(() => {
+      card.hidden = false;
+      $('app').classList.add('route-on');
+    });
+  } else {
+    $('app').classList.add('route-on');
+  }
   map?.closePopup();
 }
 
 async function showRoute(t, mode = routeMode) {
   if (!mapReady) return;
-  toggleSheet(false); // Always close Places sheet so Route Card & map never collide
+  toggleSheet(false);
   stopDriveMode(true);
+  if (followMode === 'near') stopGpsFollow();
   const seq = ++routeSeq;
   activeTarget = t;
   activeAltIdx = 0;
@@ -814,7 +971,7 @@ async function showRoute(t, mode = routeMode) {
 }
 
 function startDriveMode() {
-  if (driveWatchId !== null) {
+  if (followMode === 'drive') {
     stopDriveMode(false);
     return;
   }
@@ -824,6 +981,8 @@ function startDriveMode() {
     return;
   }
   toggleSheet(false);
+  driveStepIdx = 0;
+  lastSpokenText = '';
   const dest = endpoints(activeTarget, routeMode)[1];
   const rt = activeRoutes[activeAltIdx];
   const firstStep = rt.steps[0];
@@ -835,36 +994,9 @@ function startDriveMode() {
   $('hud-icon').innerHTML = maneuverSVG(firstStep ? firstStep.maneuver : {});
   $('hud-step').textContent = firstInstruction;
   $('hud-meta').textContent = `${fmtKm(rt.km)} · ${fmtMin(rt.min)} · Arrive ${fmtDubaiETA(rt.min)}`;
+
+  startGpsFollow('drive', 16);
   speakTurn(`Starting route to ${dest.name}. ${firstInstruction}`, true);
-
-  driveWatchId = navigator.geolocation.watchPosition(
-    pos => {
-      const c = { lat: pos.coords.latitude, lng: pos.coords.longitude, heading: pos.coords.heading, t: Date.now() };
-      userPos = c;
-      updateUserDot(c);
-      map.panTo([c.lat, c.lng], { animate: !reduceMotion });
-
-      const remKm = haversineKm(c, dest) * ROAD_FACTOR;
-      const remMin = Math.max(1, Math.round(remKm / AVG_KMH * 60));
-      if (remKm < 0.07) {
-        const msg = `Arrived at ${dest.name}`;
-        $('hud-step').textContent = msg;
-        $('hud-meta').textContent = 'Destination reached';
-        toast(msg);
-        speakTurn(msg, true);
-        stopDriveMode(true);
-      } else {
-        $('rc-km').textContent = fmtKm(remKm);
-        $('rc-min').textContent = fmtMin(remMin);
-        $('rc-eta').textContent = fmtDubaiETA(remMin);
-        $('hud-meta').textContent = `${fmtKm(remKm)} left · ~${fmtMin(remMin)} · ETA ${fmtDubaiETA(remMin)}`;
-      }
-    },
-    () => {
-      toast('Waiting for GPS signal…');
-    },
-    { enableHighAccuracy: true, maximumAge: 3000, timeout: 10000 }
-  );
 }
 
 async function loadDriving() {
@@ -946,8 +1078,13 @@ function initMap() {
     });
 
     map.on('zoomend moveend', updateClusters);
+    map.on('dragstart', () => {
+      if (isFollowing) {
+        setFollowActive(false);
+        if (followMode === 'drive') toast('GPS follow paused — tap Recenter to resume');
+      }
+    });
 
-    // Tap anywhere on the map to drop a destination pin and route in English
     map.on('click', async e => {
       const { lat, lng } = e.latlng;
       const dest = { name: 'Dropped Pin', type: `${lat.toFixed(5)}, ${lng.toFixed(5)}`, lat, lng, isCustom: true };
@@ -984,21 +1121,26 @@ initMap();
 /* ---------- UI Event Bindings ---------- */
 function locate() {
   if (!mapReady) return toast('Map not ready yet');
-  toast('Finding your GPS location…');
-  getUserPos().then(
-    c => flyTo([c.lat, c.lng], 14),
-    () => toast('Location blocked. Allow location access in browser settings.')
-  );
+  toast('Following your GPS location…');
+  startGpsFollow('near', 15);
 }
 
 $('theme-toggle').onclick = () => viewTransition(() => applyTheme(currentTheme === 'dark' ? 'light' : 'dark'));
+$('tool-recenter').onclick = () => {
+  if (!mapReady) return;
+  setFollowActive(true);
+  startCompass();
+  if (userPos) flyTo([userPos.lat, userPos.lng], Math.max(map.getZoom(), 16));
+  else startGpsFollow(followMode || 'drive', 16);
+  toast('Following your location');
+};
 $('tool-zoom-in').onclick = () => map?.zoomIn();
 $('tool-zoom-out').onclick = () => map?.zoomOut();
 $('nav-list').onclick = () => toggleSheet();
 $('sheet-grab').onclick = () => toggleSheet();
 $('open-list-empty').onclick = () => toggleSheet(true);
-$('nav-fit').onclick = () => { toggleSheet(false); clearRoute(); fitAll(); };
-$('nav-hq').onclick = () => { if (!mapReady) return; toggleSheet(false); clearRoute(); flyTo([HQ.lat, HQ.lng], 15); hqMarker.openPopup(); };
+$('nav-fit').onclick = () => { stopGpsFollow(); toggleSheet(false); clearRoute(); fitAll(); };
+$('nav-hq').onclick = () => { if (!mapReady) return; stopGpsFollow(); toggleSheet(false); clearRoute(); flyTo([HQ.lat, HQ.lng], 15); hqMarker.openPopup(); };
 $('nav-locate').onclick = locate;
 
 $('rc-close').onclick = () => { clearRoute(); fitAll(); };
@@ -1006,11 +1148,13 @@ $('rc-drive').onclick = startDriveMode;
 $('hud-stop').onclick = () => stopDriveMode(false);
 $('hud-voice').onclick = () => {
   voiceEnabled = !voiceEnabled;
-  try { localStorage.setItem('algurgVoice', voiceEnabled ? '1' : '0'); } catch {}
   updateVoiceUI();
-  toast(voiceEnabled ? 'Voice guidance on' : 'Voice guidance muted');
-  if (voiceEnabled) speakTurn($('hud-step').textContent, true);
-  else try { window.speechSynthesis?.cancel(); } catch {}
+  toast(voiceEnabled ? 'Voice guidance enabled' : 'Voice guidance muted');
+  if (voiceEnabled && followMode === 'drive') speakTurn($('hud-step').textContent, true);
+  else {
+    lastSpokenText = '';
+    try { window.speechSynthesis?.cancel(); } catch {}
+  }
 };
 
 $('route-card').addEventListener('click', e => {
@@ -1101,7 +1245,7 @@ async function updateCacheMeta() {
   try {
     const c = await caches.open('algurg-tiles-v7');
     const keys = await c.keys();
-    el.textContent = `Algurg Map v14 · ${keys.length} offline map tiles cached`;
+    el.textContent = `Algurg Map v15 · ${keys.length} offline map tiles cached`;
   } catch {}
 }
 const syncNet = () => {

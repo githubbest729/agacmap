@@ -51,8 +51,9 @@
       <strong id="hud-step">Follow route</strong>
       <small id="hud-meta">Calculating&hellip;</small>
     </div>
-    <button id="hud-voice" class="icon-btn sm" type="button" aria-pressed="true" aria-label="Toggle voice guidance" title="Toggle voice guidance">
-      <svg id="voice-icon" viewBox="0 0 24 24" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+    <button id="hud-voice" class="pill secondary voice-btn" type="button" aria-pressed="false" aria-label="Toggle voice guidance">
+      <svg id="voice-icon" viewBox="0 0 24 24" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
+      <span>Voice guidance</span>
     </button>
     <button id="hud-stop" class="pill danger" type="button">End</button>
   </section>
@@ -73,6 +74,9 @@
 
   <!-- Right-Side Quick Map Controls -->
   <div class="map-tools" aria-label="Map tools">
+    <button id="tool-recenter" class="icon-btn sm recenter-btn" type="button" aria-pressed="true" aria-label="Recenter and follow GPS" title="Recenter / Follow">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
+    </button>
     <button id="tool-zoom-in" class="icon-btn sm" type="button" aria-label="Zoom in" title="Zoom in">+</button>
     <button id="tool-zoom-out" class="icon-btn sm" type="button" aria-label="Zoom out" title="Zoom out">&minus;</button>
   </div>
@@ -158,7 +162,7 @@
         <ul id="geo-list" class="list"></ul>
       </div>
       <p id="no-results" class="empty-inline" hidden>No matching places. Try typing a street, mall, or company in Dubai, or tap anywhere on the map.</p>
-      <p id="cache-meta" class="sheet-ver">Algurg Map v14 &middot; Jebel Ali Corporate Office</p>
+      <p id="cache-meta" class="sheet-ver">Algurg Map v15 &middot; Jebel Ali Corporate Office</p>
     </div>
   </section>
 
