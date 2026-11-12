@@ -55,6 +55,21 @@ const PLACES = [
 PLACES.forEach(p => { p.km = haversineKm(HQ, p); });
 PLACES.sort((a, b) => a.km - b.km); // closest first; list and markers share this order
 
+/* ---------- Map tile provider (pick one; all render English/Latin labels) ----------
+   'carto'  : CARTO Voyager. No key. Check CARTO's terms before commercial use.
+   'osm'    : OpenStreetMap standard. No key, light use only, but labels are Arabic in Dubai.
+   'stadia' : Stadia Alidade Smooth. Needs a Stadia account + your domain registered (domain auth); free plan is NON-commercial,
+              commercial use needs a paid plan. Without a registered domain its tiles return 401 errors. */
+const TILE_PROVIDER = 'carto';
+const OSM_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors';
+const TILE_PROVIDERS = {
+  carto:  { url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', opts: { subdomains: 'abcd', maxZoom: 20 },
+            attr: OSM_ATTR + ' &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>' },
+  osm:    { url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', opts: { maxZoom: 19 }, attr: OSM_ATTR },
+  stadia: { url: 'https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png', opts: { maxZoom: 20 },
+            attr: '&copy; <a href="https://stadiamaps.com/" target="_blank" rel="noopener">Stadia Maps</a> &copy; <a href="https://openmaptiles.org/" target="_blank" rel="noopener">OpenMapTiles</a> ' + OSM_ATTR }
+};
+
 const $ = id => document.getElementById(id);
 let map, markers = [], hqMarker, mapReady = false, userMarker;
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -74,6 +89,7 @@ function renderList(filter = '') {
     !f || (p.name + ' ' + p.type + ' ' + CATS[p.cat].label).toLowerCase().includes(f));
   items.forEach(({ p, i }) => {
     const li = document.createElement('li');
+    li.style.setProperty('--i', Math.min(i, 16));
     li.innerHTML = `<button class="item" data-i="${i}">
       <span class="dot" style="background:${CATS[p.cat].color}" aria-hidden="true"></span>
       <span class="txt"><strong>${esc(p.name)}</strong><small>${CATS[p.cat].label} · ${esc(p.type)}</small></span>
@@ -88,7 +104,11 @@ function toggleSheet(open) {
   const s = $('sheet'); const on = open ?? !s.classList.contains('open');
   s.classList.toggle('open', on); s.setAttribute('aria-hidden', String(!on));
   $('nav-list').setAttribute('aria-pressed', String(on));
-  if (on) setTimeout(() => $('q').focus({ preventScroll: true }), 300);
+  if (on) {
+    const l = $('list'); l.classList.remove('stagger'); void l.offsetWidth; l.classList.add('stagger'); // restart cascade
+    setTimeout(() => l.classList.remove('stagger'), 1400);
+    setTimeout(() => $('q').focus({ preventScroll: true }), 300);
+  }
 }
 
 /* ---------- Map ---------- */
@@ -122,12 +142,12 @@ function fitAll() {
 }
 
 // Coloured SVG pin inside a >=44px tap area (animation lives on the inner svg so Leaflet's positioning isn't disturbed)
-function pinIcon(color, scale = 1) {
+function pinIcon(color, scale = 1, pulse = false) {
   const w = Math.round(32 * scale), h = Math.round(40 * scale), bw = Math.max(w, 44), bh = Math.max(h, 44);
   return L.divIcon({
     className: 'pin-hit' + (reduceMotion ? '' : ' drop'),
     iconSize: [bw, bh], iconAnchor: [bw / 2, bh], popupAnchor: [0, -h + 4],
-    html: `<svg width="${w}" height="${h}" viewBox="0 0 32 40" aria-hidden="true"><path d="M16 39C16 39 2 24 2 14a14 14 0 0 1 28 0c0 10-14 25-14 25z" fill="${color}" stroke="#fff" stroke-width="2.5"/><circle cx="16" cy="14" r="5" fill="#fff"/></svg>`
+    html: `${pulse ? '<span class="pulse" aria-hidden="true"></span>' : ''}<svg width="${w}" height="${h}" viewBox="0 0 32 40" aria-hidden="true"><path d="M16 39C16 39 2 24 2 14a14 14 0 0 1 28 0c0 10-14 25-14 25z" fill="${color}" stroke="#fff" stroke-width="2.5"/><circle cx="16" cy="14" r="5" fill="#fff"/></svg>`
   });
 }
 
@@ -138,17 +158,14 @@ function initMap() {
       zoomAnimation: !reduceMotion, fadeAnimation: !reduceMotion, markerZoomAnimation: !reduceMotion });
     L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-    // CARTO Voyager: free, no API key, Latin/English labels (default OSM tiles show local Arabic names in Dubai)
-    const tiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-      subdomains: 'abcd', maxZoom: 20, crossOrigin: true,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>'
-    }).addTo(map);
+    const T = TILE_PROVIDERS[TILE_PROVIDER];
+    const tiles = L.tileLayer(T.url, { crossOrigin: true, attribution: T.attr, ...T.opts }).addTo(map);
     const hideSkeleton = () => $('skeleton').classList.add('done');
     tiles.once('load', hideSkeleton); setTimeout(hideSkeleton, 6000);
     let warned = false;
     tiles.on('tileerror', () => { if (!warned) { warned = true; toast(navigator.onLine ? 'Some map tiles failed to load' : 'Offline: showing saved map areas only'); } });
 
-    hqMarker = L.marker([HQ.lat, HQ.lng], { icon: pinIcon('#0b6e8a', 1.5), title: HQ.name, alt: HQ.name, zIndexOffset: 1000 })
+    hqMarker = L.marker([HQ.lat, HQ.lng], { icon: pinIcon('#0b6e8a', 1.5, true), title: HQ.name, alt: HQ.name, zIndexOffset: 1000 })
       .addTo(map).bindPopup(popupHTML(HQ, true), { maxWidth: 260 });
     markers = PLACES.map(p => {
       try {
