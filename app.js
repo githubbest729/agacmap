@@ -6,7 +6,7 @@
    NOTE: https://maps.app.goo.gl/zwPVNuzgspFVWzuF8 opens "Dubai World Trade Centre" (25.2233459, 55.2869344),
    not Algurg, so it was NOT used. All distances are measured from this point.
    Temporary test override: add ?hq=25.1234,55.1234 to the page URL. */
-const HQ = { name: 'Algurg Automation and Controls', lat: 25.0990, lng: 55.1640 };
+const HQ = { name: 'Algurg Automation and Controls', lat: 24.9999384, lng: 55.1300456 };
 (() => { const o = new URLSearchParams(location.search).get('hq'); if (o) { const [a, b] = o.split(',').map(Number);
   if (isFinite(a) && isFinite(b)) { HQ.lat = a; HQ.lng = b; } } })();
 
