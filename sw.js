@@ -1,4 +1,4 @@
-const VERSION = 'algurg-map-v16';
+const VERSION = 'algurg-map-v17';
 const TILES = 'algurg-tiles-v7';
 const CARTO_KEY = 'cb1_57cr_1_f31ce75418c7d6e7e9f3426f';
 
@@ -10,7 +10,6 @@ const SHELL = [
   'icons/icon-512.png', 'icons/apple-touch-icon.png', 'favicon.ico'
 ];
 
-// Pre-warm core Dubai & Jebel Ali HQ dark tiles (z=11 & z=12) for immediate offline availability
 const PREFETCH_TILES = [
   `https://basemaps.cartocdn.com/rastertiles/dark_all/11/1337/876.png?key=${CARTO_KEY}`,
   `https://basemaps.cartocdn.com/rastertiles/dark_all/11/1337/877.png?key=${CARTO_KEY}`,

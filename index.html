@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Algurg Map Locator</title>
-<meta name="description" content="Interactive 2026 English navigation & locator PWA for Algurg Automation and Controls, Jebel Ali, Dubai.">
+<meta name="description" content="Hands-free 2026 Dubai dashboard navigation & locator PWA for Algurg Automation and Controls, Jebel Ali.">
 <meta id="meta-theme" name="theme-color" content="#0b131e">
 <meta name="color-scheme" content="dark light">
 <link rel="manifest" href="manifest.json">
@@ -18,7 +18,7 @@
 <meta name="format-detection" content="telephone=no">
 <meta property="og:type" content="website">
 <meta property="og:title" content="Algurg Map Locator">
-<meta property="og:description" content="Navigate in-app from Algurg Automation and Controls (Jebel Ali) to anywhere in Dubai & UAE.">
+<meta property="og:description" content="Hands-free dashboard navigation from Algurg Automation and Controls (Jebel Ali) across Dubai & UAE.">
 <meta property="og:url" content="https://githubbest729.github.io/agacmap/">
 <meta property="og:image" content="https://githubbest729.github.io/agacmap/assets/og-image.jpg">
 <meta property="og:image:width" content="1200">
@@ -31,7 +31,7 @@
 </head>
 <body>
 <div id="app">
-  <!-- Top Glass Command Bar -->
+  <!-- Top Glass Command Bar (hidden during active Drive mode) -->
   <header class="topbar">
     <img src="assets/icon.svg" alt="" width="38" height="38" class="logo">
     <div class="titles">
@@ -44,18 +44,40 @@
     </button>
   </header>
 
-  <!-- Live GPS Drive Mode Top HUD -->
-  <section id="drive-hud" class="drive-hud" hidden aria-label="Active navigation guidance">
-    <div class="hud-icon" id="hud-icon" aria-hidden="true"></div>
-    <div class="hud-main">
-      <strong id="hud-step">Follow route</strong>
-      <small id="hud-meta">Calculating&hellip;</small>
+  <!-- Large Glanceable Car-Mount Drive Mode HUD -->
+  <section id="drive-hud" class="drive-hud" hidden aria-label="Hands-free navigation guidance">
+    <div class="hud-top">
+      <div class="hud-icon" id="hud-icon" aria-hidden="true"></div>
+      <div class="hud-main">
+        <div class="hud-dist-row">
+          <span class="hud-dist" id="hud-dist">0 m</span>
+          <span class="hud-wake" id="hud-wake" hidden title="Screen awake active">AWAKE</span>
+        </div>
+        <strong id="hud-step">Follow route</strong>
+        <small id="hud-meta">Calculating&hellip;</small>
+      </div>
     </div>
-    <button id="hud-voice" class="pill secondary voice-btn" type="button" aria-pressed="false" aria-label="Toggle voice guidance">
-      <svg id="voice-icon" viewBox="0 0 24 24" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
-      <span>Voice guidance</span>
-    </button>
-    <button id="hud-stop" class="pill danger" type="button">End</button>
+    <div class="hud-controls" role="group" aria-label="Driver quick controls">
+      <button id="hud-voice" class="hud-btn" type="button" aria-pressed="false" aria-label="Toggle voice guidance">
+        <svg id="voice-icon" viewBox="0 0 24 24" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
+        <span id="hud-voice-lbl">Voice: OFF</span>
+      </button>
+      <button id="hud-repeat" class="hud-btn" type="button" aria-label="Repeat last instruction">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+        <span>Repeat</span>
+      </button>
+      <button id="hud-calm" class="hud-btn" type="button" aria-pressed="true" aria-label="Toggle low-distraction drive map">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        <span>Calm Map</span>
+      </button>
+      <button id="hud-hq" class="hud-btn hq" type="button" aria-label="Route to Algurg HQ">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+        <span>To HQ</span>
+      </button>
+      <button id="hud-stop" class="hud-btn danger" type="button" aria-label="End navigation">
+        <span>End</span>
+      </button>
+    </div>
   </section>
 
   <!-- Map Stage -->
@@ -81,7 +103,7 @@
     <button id="tool-zoom-out" class="icon-btn sm" type="button" aria-label="Zoom out" title="Zoom out">&minus;</button>
   </div>
 
-  <!-- Install Prompt (auto-hidden when route card, sheet, or drive HUD is open) -->
+  <!-- Install Prompt (strictly hidden when route card, sheet, or drive HUD is open) -->
   <aside id="install" class="install" hidden role="dialog" aria-labelledby="install-title">
     <img src="assets/icon.svg" alt="" width="44" height="44">
     <div>
@@ -122,7 +144,7 @@
     </div>
 
     <p id="rc-note" class="rc-note rc-hide-drive" role="status"></p>
-    <p id="rc-voice-hint" class="rc-voice-hint rc-hide-drive">Voice guidance available after Start Drive</p>
+    <p id="rc-voice-hint" class="rc-voice-hint rc-hide-drive">Hands-free voice &amp; screen wake lock activate in Start Drive (voice is OFF by default)</p>
 
     <details class="steps rc-hide-drive" id="rc-details">
       <summary>Turn-by-turn directions (<span id="rc-step-count">0</span>&nbsp;steps)</summary>
@@ -141,18 +163,25 @@
     </div>
   </section>
 
-  <!-- Places & UAE Anywhere Search Sheet -->
-  <section id="sheet" class="sheet" aria-hidden="true" aria-label="Places and Dubai search">
+  <!-- Places & UAE Driver Search Sheet -->
+  <section id="sheet" class="sheet" aria-hidden="true" aria-label="Places and Dubai driver search">
     <button type="button" class="grab-btn" id="sheet-grab" aria-label="Toggle places list"><span class="grab"></span></button>
     <div class="sheet-head">
       <h2>Navigate from Algurg</h2>
       <p id="sheet-sub">Driving distance and time from Jebel Ali HQ, nearest first</p>
     </div>
     <div id="chips" class="chips" role="group" aria-label="Filter by category"></div>
+    <div class="driver-shortcuts" role="group" aria-label="Quick driver searches">
+      <button type="button" class="drv-chip" data-drv="Petrol station Dubai">Petrol</button>
+      <button type="button" class="drv-chip" data-drv="Parking Dubai">Parking</button>
+      <button type="button" class="drv-chip" data-drv="Hospital Dubai">Hospital</button>
+      <button type="button" class="drv-chip" data-drv="Metro station Dubai">Metro</button>
+      <button type="button" class="drv-chip" data-drv="Mosque Dubai">Mosque</button>
+    </div>
     <div class="search-wrap">
       <label class="search">
         <span class="sr">Search preset places or any address in Dubai &amp; UAE</span>
-        <input id="q" type="search" placeholder="Search places or any Dubai address&hellip;" autocomplete="off" enterkeyhint="search">
+        <input id="q" type="search" placeholder="Search places, petrol, parking, or Dubai address&hellip;" autocomplete="off" enterkeyhint="search">
       </label>
       <button id="q-clear" class="icon-btn sm" type="button" hidden aria-label="Clear search">&times;</button>
     </div>
@@ -162,8 +191,8 @@
         <p class="geo-label" id="geo-label">Dubai &amp; UAE Locations</p>
         <ul id="geo-list" class="list"></ul>
       </div>
-      <p id="no-results" class="empty-inline" hidden>No matching places. Try typing a street, mall, or company in Dubai, or tap anywhere on the map.</p>
-      <p id="cache-meta" class="sheet-ver">Algurg Map v16 &middot; Jebel Ali Corporate Office</p>
+      <p id="no-results" class="empty-inline" hidden>No matching places. Try tapping Petrol/Parking above, typing a Dubai street, or tapping anywhere on the map.</p>
+      <p id="cache-meta" class="sheet-ver">Algurg Map v17 &middot; Jebel Ali Corporate Office</p>
     </div>
   </section>
 

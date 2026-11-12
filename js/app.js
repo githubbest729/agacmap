@@ -1,11 +1,11 @@
 'use strict';
-/* Algurg Map Locator & In-App Navigator (v15 — Priority 3 Complete)
-   - Live GPS Follow + DeviceOrientation Compass Rotation + Manual Pan Pause & Recenter
-   - View Transitions API for Places Sheet & Route Card with reduced-motion fallback
-   - Optional Web Speech API Voice Guidance (OFF by default, Drive mode only)
-   - Zero-dependency Marker Clustering + Active Destination Spotlight
-   - CARTO Dark Matter (dark_all) & Positron (light_all) English Map Tiles + CARTO Basemaps API Key
-   - Free keyless OSRM Routing + UAE Arabic-to-English Street Translator + Photon UAE Geocoding */
+/* Algurg Map Locator & Hands-Free Dashboard Navigator (v17)
+   - Screen Wake Lock API during Drive mode with automatic visibility re-acquisition
+   - Large Glanceable Car-Mount Next-Turn HUD + Distance-to-Turn + One-Tap Quick Actions
+   - Automatic Off-Route Detection & Cooldown-Throttled Rerouting
+   - Two-Stage Hands-Free Voice Guidance (OFF by default) + Repeat Last Instruction
+   - Snap-to-Route GPS Stabilization + Tunnel/Flyover Signal Loss Auto-Resume
+   - Low-Distraction Calm Driving Map Mode + Driver Search Shortcuts */
 
 const HQ = { name: 'Algurg Automation and Controls', lat: 24.9999384, lng: 55.1300456 };
 (() => {
@@ -24,6 +24,9 @@ function haversineKm(a, b) {
 }
 const fmtKm = km => (km < 100 ? km.toFixed(1) : Math.round(km)) + ' km';
 const fmtMin = m => m < 60 ? `${m} min` : `${Math.floor(m / 60)} hr${m % 60 ? ' ' + (m % 60) + ' min' : ''}`;
+const fmtStepDist = m => m < 1000 ? `${Math.max(10, Math.round(m / 10) * 10)} m` : `${(m / 1000).toFixed(1)} km`;
+const fmtVoiceDist = m => m < 1000 ? `${Math.max(20, Math.round(m / 10) * 10)} meters` : `${(m / 1000).toFixed(1)} kilometers`;
+
 function fmtDubaiETA(min) {
   try {
     return new Intl.DateTimeFormat('en-US', {
@@ -224,7 +227,7 @@ function loadSavedDrive() {
 }
 loadSavedDrive(); resort();
 
-/* ---------- Map Tile Providers (English Labels in Dark & Light Mode) ---------- */
+/* ---------- Map Tile Providers ---------- */
 const CARTO_KEY = 'cb1_57cr_1_f31ce75418c7d6e7e9f3426f';
 const OSM_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>';
 const CARTO_ATTR = OSM_ATTR + ' &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>';
@@ -253,7 +256,7 @@ function toast(msg) {
 }
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-/* ---------- Light / Dark Theme Management ---------- */
+/* ---------- Light / Dark Theme & Calm Drive Map Mode ---------- */
 let currentTheme = (() => {
   try {
     const saved = localStorage.getItem('algurgTheme');
@@ -261,6 +264,7 @@ let currentTheme = (() => {
   } catch {}
   return matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
 })();
+let calmMapEnabled = true;
 
 function applyTheme(theme) {
   currentTheme = theme === 'light' ? 'light' : 'dark';
@@ -278,14 +282,60 @@ function applyTheme(theme) {
 }
 applyTheme(currentTheme);
 
-/* ---------- Web Speech API Voice Guidance (OFF by default, Drive mode only) ---------- */
+function syncCalmMap() {
+  const active = followMode === 'drive' && calmMapEnabled;
+  $('app').classList.toggle('calm-map', active);
+  const btn = $('hud-calm');
+  if (btn) btn.setAttribute('aria-pressed', String(calmMapEnabled));
+}
+
+/* ---------- Screen Wake Lock API (Priority 1: Keep screen awake in Drive mode) ---------- */
+let wakeLockSentinel = null;
+
+async function acquireWakeLock() {
+  if (!('wakeLock' in navigator) || document.visibilityState !== 'visible') return;
+  if (wakeLockSentinel && !wakeLockSentinel.released) return;
+  try {
+    wakeLockSentinel = await navigator.wakeLock.request('screen');
+    const badge = $('hud-wake');
+    if (badge) badge.hidden = false;
+    wakeLockSentinel.addEventListener('release', () => {
+      wakeLockSentinel = null;
+      if ($('hud-wake')) $('hud-wake').hidden = true;
+    });
+  } catch {
+    wakeLockSentinel = null;
+  }
+}
+
+async function releaseWakeLock() {
+  if (wakeLockSentinel) {
+    try { await wakeLockSentinel.release(); } catch {}
+    wakeLockSentinel = null;
+  }
+  if ($('hud-wake')) $('hud-wake').hidden = true;
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') {
+    releaseWakeLock();
+  } else if (document.visibilityState === 'visible' && followMode === 'drive') {
+    acquireWakeLock();
+  }
+});
+
+/* ---------- Hands-Free Voice Guidance (OFF by default, two-stage prompts + Repeat) ---------- */
 let voiceEnabled = false;
 let lastSpokenText = '';
+let lastInstructionText = '';
+let spokenFarStep = -1;
+let spokenCloseStep = -1;
 
 function updateVoiceUI() {
-  const btn = $('hud-voice'), ico = $('voice-icon');
+  const btn = $('hud-voice'), ico = $('voice-icon'), lbl = $('hud-voice-lbl');
   if (!btn || !ico) return;
   btn.setAttribute('aria-pressed', String(voiceEnabled));
+  if (lbl) lbl.textContent = voiceEnabled ? 'Voice: ON' : 'Voice: OFF';
   ico.innerHTML = voiceEnabled
     ? '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>'
     : '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/>';
@@ -293,7 +343,9 @@ function updateVoiceUI() {
 updateVoiceUI();
 
 function speakTurn(text, force = false) {
-  if (!voiceEnabled || followMode !== 'drive' || !text || !('speechSynthesis' in window)) return;
+  if (!text) return;
+  lastInstructionText = text;
+  if (!voiceEnabled || followMode !== 'drive' || !('speechSynthesis' in window)) return;
   if (!force && text === lastSpokenText) return;
   lastSpokenText = text;
   try {
@@ -305,7 +357,23 @@ function speakTurn(text, force = false) {
   } catch {}
 }
 
-/* ---------- Places List & UAE Anywhere Search ---------- */
+function repeatLastInstruction() {
+  const current = lastInstructionText || $('hud-step').textContent;
+  if (!current || !('speechSynthesis' in window)) {
+    toast(current || 'No active instruction');
+    return;
+  }
+  try {
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(current);
+    u.lang = 'en-US';
+    u.rate = 1.0;
+    window.speechSynthesis.speak(u);
+    toast('Repeating instruction');
+  } catch {}
+}
+
+/* ---------- Places List & UAE Driver Search ---------- */
 let catFilter = 'all', geoResults = [], geoTimer = null;
 
 function buildChips() {
@@ -357,8 +425,9 @@ async function searchUAE(query) {
   }
   lbl.textContent = 'Searching Dubai & UAE…';
   wrap.hidden = false;
+  const ref = userPos || HQ;
   try {
-    const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&lat=${HQ.lat}&lon=${HQ.lng}&lang=en&limit=6`;
+    const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&lat=${ref.lat}&lon=${ref.lng}&lang=en&limit=6`;
     const j = await fetchJSON(url);
     const feats = (j.features || []).filter(ft => {
       const cc = ft.properties && ft.properties.countrycode;
@@ -371,7 +440,7 @@ async function searchUAE(query) {
       const name = toEnglishRoad(rawName) || 'Dubai Location';
       const subParts = [pr.district || pr.suburb || pr.city, pr.state].filter(Boolean).map(toEnglishRoad);
       const sub = subParts.join(', ') || 'Dubai, United Arab Emirates';
-      const km = haversineKm(HQ, { lat, lng }) * ROAD_FACTOR;
+      const km = haversineKm(ref, { lat, lng }) * ROAD_FACTOR;
       const min = Math.max(1, Math.round(km / AVG_KMH * 60));
       return { name, type: sub, lat, lng, km, min, isCustom: true };
     });
@@ -549,16 +618,65 @@ function fitAll() {
   map.fitBounds(b, { paddingTopLeft: [24, 90], paddingBottomRight: [24, bar + 20], animate: !reduceMotion });
 }
 
-/* ---------- In-App Routing, Alternatives, Live GPS Follow & Compass Heading ---------- */
+/* ---------- Snap-to-Route Geometry & Bearing Helpers ---------- */
+function bearingDeg(a, b) {
+  const rad = d => d * Math.PI / 180, deg = r => r * 180 / Math.PI;
+  const dLng = rad(b.lng - a.lng);
+  const y = Math.sin(dLng) * Math.cos(rad(b.lat));
+  const x = Math.cos(rad(a.lat)) * Math.sin(rad(b.lat)) - Math.sin(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.cos(dLng);
+  return (deg(Math.atan2(y, x)) + 360) % 360;
+}
+
+function snapToRoute(pos, line) {
+  if (!line || line.length < 2) return null;
+  const cosLat = Math.cos(pos.lat * Math.PI / 180);
+  let best = { distMeters: Infinity, lat: pos.lat, lng: pos.lng, bearing: null, segIdx: 0 };
+
+  for (let i = 0; i < line.length - 1; i++) {
+    const aLat = line[i][0], aLng = line[i][1];
+    const bLat = line[i + 1][0], bLng = line[i + 1][1];
+    const ax = aLng * cosLat, ay = aLat;
+    const bx = bLng * cosLat, by = bLat;
+    const px = pos.lng * cosLat, py = pos.lat;
+    const dx = bx - ax, dy = by - ay;
+    const len2 = dx * dx + dy * dy;
+    const t = len2 > 0 ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2)) : 0;
+    const projLat = aLat + t * (bLat - aLat);
+    const projLng = aLng + t * (bLng - aLng);
+    const dMeters = haversineKm(pos, { lat: projLat, lng: projLng }) * 1000;
+    if (dMeters < best.distMeters) {
+      best = {
+        distMeters: dMeters,
+        lat: projLat,
+        lng: projLng,
+        bearing: bearingDeg({ lat: aLat, lng: aLng }, { lat: bLat, lng: bLng }),
+        segIdx: i
+      };
+    }
+  }
+  return best;
+}
+
+/* ---------- In-App Routing, Auto-Rerouting, Live GPS Follow & Compass ---------- */
 let routeGroup, routeSeq = 0, routeMode = 'from', activeTarget = null, activeRoutes = [], activeAltIdx = 0;
 let customDest = null, userPos = null;
 const routeCache = {};
 
-let followMode = null;     // 'near' | 'drive' | null
+let followMode = null;       // 'near' | 'drive' | null
 let isFollowing = false;
+let manualPanPause = false;
 let gpsWatchId = null;
+let gpsStaleTimer = null;
+let lastGpsFixAt = 0;
+let gpsWasLost = false;
 let compassHandler = null;
 let driveStepIdx = 0;
+
+let offRouteStrikes = 0;
+let lastRerouteAt = 0;
+let isRerouting = false;
+const OFF_ROUTE_METERS = 65;
+const REROUTE_COOLDOWN_MS = 15000;
 
 async function fetchJSON(url) {
   const ac = new AbortController(), t = setTimeout(() => ac.abort(), 9500);
@@ -582,11 +700,11 @@ function setDrive(p, km, min, est) {
 
 function getUserPos() {
   return new Promise((res, rej) => {
-    if (userPos && Date.now() - userPos.t < 180000) return res(userPos);
+    if (userPos && Date.now() - userPos.t < 120000) return res(userPos);
     if (!navigator.geolocation) return rej(new Error('unsupported'));
     navigator.geolocation.getCurrentPosition(
       pos => {
-        userPos = { lat: pos.coords.latitude, lng: pos.coords.longitude, heading: pos.coords.heading, t: Date.now() };
+        userPos = { lat: pos.coords.latitude, lng: pos.coords.longitude, heading: pos.coords.heading, speed: pos.coords.speed, t: Date.now() };
         updateUserDot(userPos);
         res(userPos);
       },
@@ -604,8 +722,8 @@ function updateUserDot(c) {
       icon: L.divIcon({
         className: '',
         html: '<div class="me-wrap" id="me-wrap"><div class="me-cone"></div><div class="me-dot"></div></div>',
-        iconSize: [36, 36],
-        iconAnchor: [18, 18]
+        iconSize: [40, 40],
+        iconAnchor: [20, 20]
       })
     }).addTo(map);
   } else {
@@ -638,6 +756,8 @@ function setMapRotation(deg) {
 
 function onDeviceOrientation(e) {
   if (!isFollowing) return;
+  // Prefer GPS/route course over magnetometer when moving faster than ~7 km/h on a dashboard mount
+  if (userPos && typeof userPos.speed === 'number' && userPos.speed > 2.0) return;
   let heading = null;
   if (typeof e.webkitCompassHeading === 'number' && isFinite(e.webkitCompassHeading)) {
     heading = e.webkitCompassHeading;
@@ -671,6 +791,7 @@ function stopCompass() {
 
 function setFollowActive(active) {
   isFollowing = active;
+  if (active) manualPanPause = false;
   const btn = $('tool-recenter');
   if (btn) btn.setAttribute('aria-pressed', String(active));
   if (!active) setMapRotation(null);
@@ -681,8 +802,14 @@ function stopGpsFollow() {
     navigator.geolocation.clearWatch(gpsWatchId);
     gpsWatchId = null;
   }
+  if (gpsStaleTimer) {
+    clearInterval(gpsStaleTimer);
+    gpsStaleTimer = null;
+  }
   stopCompass();
   followMode = null;
+  manualPanPause = false;
+  gpsWasLost = false;
   $('app').classList.remove('gps-follow');
   setFollowActive(false);
 }
@@ -700,7 +827,6 @@ function endpoints(t, mode) {
   return [h, pl];
 }
 
-const fmtStepDist = m => m < 1000 ? `${Math.max(10, Math.round(m / 10) * 10)} m` : `${(m / 1000).toFixed(1)} km`;
 const compass = b => ['north', 'northeast', 'east', 'southeast', 'south', 'southwest', 'west', 'northwest'][Math.round(((b % 360) + 360) % 360 / 45) % 8];
 
 function maneuverSVG(m = {}) {
@@ -755,32 +881,91 @@ function fitRoute(latlngs) {
   });
 }
 
-function updateDriveProgress(c) {
-  if (followMode !== 'drive' || activeTarget === null || !activeRoutes[activeAltIdx]) return;
+/* ---------- Priority 1: Automatic Off-Route Detection & Rerouting ---------- */
+async function triggerAutoReroute(c) {
+  if (isRerouting || followMode !== 'drive' || activeTarget === null) return;
+  if (Date.now() - lastRerouteAt < REROUTE_COOLDOWN_MS) return;
+  isRerouting = true;
+  lastRerouteAt = Date.now();
+  offRouteStrikes = 0;
+
+  $('hud-step').textContent = 'Recalculating route…';
+  $('hud-dist').textContent = 'Rerouting';
+  toast('Off route — recalculating…');
+  speakTurn('Rerouting', true);
+
+  try {
+    userPos = c;
+    await showRoute(activeTarget, 'me', { keepDrive: true });
+    driveStepIdx = 0;
+    spokenFarStep = -1;
+    spokenCloseStep = -1;
+  } finally {
+    isRerouting = false;
+  }
+}
+
+function updateDriveProgress(rawPos) {
+  if (followMode !== 'drive' || activeTarget === null || !activeRoutes[activeAltIdx]) return null;
   const dest = endpoints(activeTarget, routeMode)[1];
   const rt = activeRoutes[activeAltIdx];
   const steps = rt.steps || [];
 
+  // Snap GPS position to route polyline when within 35 meters to eliminate Dubai parallel-road jitter
+  const snap = snapToRoute(rawPos, rt.line);
+  let displayPos = rawPos;
+  if (snap && snap.distMeters <= 35) {
+    displayPos = {
+      lat: snap.lat,
+      lng: snap.lng,
+      heading: (typeof rawPos.speed === 'number' && rawPos.speed > 1.5 && snap.bearing !== null) ? snap.bearing : rawPos.heading,
+      speed: rawPos.speed,
+      t: rawPos.t
+    };
+    offRouteStrikes = 0;
+  } else if (snap && snap.distMeters > OFF_ROUTE_METERS && routeMode !== 'to') {
+    offRouteStrikes++;
+    if (offRouteStrikes >= 2 || snap.distMeters > 110) {
+      triggerAutoReroute(rawPos);
+      return displayPos;
+    }
+  }
+
+  // Advance step index when within ~45 m of current maneuver waypoint
   while (driveStepIdx < steps.length - 1) {
     const loc = steps[driveStepIdx].maneuver && steps[driveStepIdx].maneuver.location;
     if (!loc) break;
-    const distToTurnKm = haversineKm(c, { lat: loc[1], lng: loc[0] });
-    if (distToTurnKm < 0.045) driveStepIdx++;
+    const distToTurnM = haversineKm(displayPos, { lat: loc[1], lng: loc[0] }) * 1000;
+    if (distToTurnM < 45) driveStepIdx++;
     else break;
   }
 
   const activeStep = steps[driveStepIdx];
   if (activeStep) {
     const instruction = stepText(activeStep);
+    const nextLoc = (steps[driveStepIdx + 1]?.maneuver?.location) || (activeStep.maneuver?.location);
+    const distM = nextLoc ? haversineKm(displayPos, { lat: nextLoc[1], lng: nextLoc[0] }) * 1000 : (activeStep.distance || 0);
+
     $('hud-icon').innerHTML = maneuverSVG(activeStep.maneuver);
+    $('hud-dist').textContent = distM > 0 ? fmtStepDist(distM) : 'Now';
     $('hud-step').textContent = instruction;
-    speakTurn(instruction);
+
+    // Two-stage voice prompt: once when step starts, once when within 110 m of turn
+    if (spokenFarStep !== driveStepIdx) {
+      spokenFarStep = driveStepIdx;
+      const prefix = distM > 60 ? `In ${fmtVoiceDist(distM)}, ` : '';
+      speakTurn(`${prefix}${instruction}`);
+    } else if (distM > 0 && distM <= 110 && spokenCloseStep !== driveStepIdx) {
+      spokenCloseStep = driveStepIdx;
+      speakTurn(`In ${fmtVoiceDist(distM)}, ${instruction}`, true);
+    }
   }
 
-  const remKm = haversineKm(c, dest) * ROAD_FACTOR;
+  const remKm = haversineKm(displayPos, dest) * ROAD_FACTOR;
   const remMin = Math.max(1, Math.round(remKm / AVG_KMH * 60));
   if (remKm < 0.07) {
     const msg = `Arrived at ${dest.name}`;
+    $('hud-dist').textContent = '0 m';
     $('hud-step').textContent = msg;
     $('hud-meta').textContent = 'Destination reached';
     toast(msg);
@@ -792,6 +977,7 @@ function updateDriveProgress(c) {
     $('rc-eta').textContent = fmtDubaiETA(remMin);
     $('hud-meta').textContent = `${fmtKm(remKm)} left · ~${fmtMin(remMin)} · ETA ${fmtDubaiETA(remMin)}`;
   }
+  return displayPos;
 }
 
 function startGpsFollow(mode, zoomTarget = null) {
@@ -803,41 +989,85 @@ function startGpsFollow(mode, zoomTarget = null) {
     navigator.geolocation.clearWatch(gpsWatchId);
     gpsWatchId = null;
   }
+  if (gpsStaleTimer) clearInterval(gpsStaleTimer);
+
   followMode = mode;
+  manualPanPause = false;
+  gpsWasLost = false;
+  lastGpsFixAt = Date.now();
   $('app').classList.add('gps-follow');
   setFollowActive(true);
   startCompass();
 
+  // Monitor short GPS dropouts (Dubai tunnels / flyovers) so follow auto-resumes when signal returns
+  gpsStaleTimer = setInterval(() => {
+    if (!followMode || !lastGpsFixAt) return;
+    const gap = Date.now() - lastGpsFixAt;
+    if (gap > 8000 && !gpsWasLost) {
+      gpsWasLost = true;
+      if (followMode === 'drive') $('hud-meta').textContent = 'GPS signal lost (tunnel/flyover) — waiting…';
+    }
+  }, 3000);
+
   let firstFix = true;
   gpsWatchId = navigator.geolocation.watchPosition(
     pos => {
-      const c = { lat: pos.coords.latitude, lng: pos.coords.longitude, heading: pos.coords.heading, t: Date.now() };
-      userPos = c;
-      updateUserDot(c);
-      if (!compassHandler && typeof c.heading === 'number' && isFinite(c.heading)) {
-        setMapRotation(c.heading);
+      const gap = Date.now() - lastGpsFixAt;
+      lastGpsFixAt = Date.now();
+
+      // Auto-resume follow after tunnel/flyover GPS loss if user didn't manually pan
+      if (gpsWasLost) {
+        gpsWasLost = false;
+        if (!manualPanPause && gap < 90000) {
+          setFollowActive(true);
+          toast('GPS signal restored');
+        }
       }
+
+      const rawPos = {
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude,
+        heading: pos.coords.heading,
+        speed: pos.coords.speed,
+        t: Date.now()
+      };
+      userPos = rawPos;
+
+      let displayPos = rawPos;
+      if (followMode === 'drive') {
+        displayPos = updateDriveProgress(rawPos) || rawPos;
+      }
+
+      updateUserDot(displayPos);
+      if (typeof displayPos.heading === 'number' && isFinite(displayPos.heading) && (!compassHandler || (displayPos.speed && displayPos.speed > 2.0))) {
+        setMapRotation(displayPos.heading);
+      }
+
       if (isFollowing) {
-        if (firstFix && zoomTarget) flyTo([c.lat, c.lng], zoomTarget);
-        else map.panTo([c.lat, c.lng], { animate: !reduceMotion });
+        if (firstFix && zoomTarget) flyTo([displayPos.lat, displayPos.lng], zoomTarget);
+        else map.panTo([displayPos.lat, displayPos.lng], { animate: !reduceMotion });
       }
       firstFix = false;
-      if (followMode === 'drive') updateDriveProgress(c);
     },
     () => {
       if (firstFix) toast('Waiting for GPS signal…');
     },
-    { enableHighAccuracy: true, maximumAge: 2500, timeout: 10000 }
+    { enableHighAccuracy: true, maximumAge: 2000, timeout: 10000 }
   );
 }
 
 function stopDriveMode(silent = false) {
   if (followMode === 'drive') stopGpsFollow();
+  releaseWakeLock();
   try { window.speechSynthesis?.cancel(); } catch {}
   lastSpokenText = '';
+  lastInstructionText = '';
   driveStepIdx = 0;
+  spokenFarStep = -1;
+  spokenCloseStep = -1;
+  offRouteStrikes = 0;
   $('drive-hud').hidden = true;
-  $('app').classList.remove('drive-on');
+  $('app').classList.remove('drive-on', 'calm-map');
   $('rc-drive-lbl').textContent = 'Start Drive';
   syncInstallPrompt();
   if (!silent) toast('Navigation ended');
@@ -924,18 +1154,20 @@ function paintCard(t, mode, o, d, r, note) {
   map?.closePopup();
 }
 
-async function showRoute(t, mode = routeMode) {
+async function showRoute(t, mode = routeMode, opts = {}) {
   if (!mapReady) return;
   toggleSheet(false, true);
-  stopDriveMode(true);
-  if (followMode === 'near') stopGpsFollow();
+  if (!opts.keepDrive) {
+    stopDriveMode(true);
+    if (followMode === 'near') stopGpsFollow();
+  }
   const seq = ++routeSeq;
   activeTarget = t;
   activeAltIdx = 0;
   updateClusters();
 
   if (mode === 'me') {
-    toast('Finding your GPS location…');
+    if (!opts.keepDrive) toast('Finding your GPS location…');
     try {
       await getUserPos();
     } catch {
@@ -951,13 +1183,13 @@ async function showRoute(t, mode = routeMode) {
   const idKey = typeof t === 'number' ? `p:${t}` : `c:${p.lat.toFixed(5)},${p.lng.toFixed(5)}`;
   const key = `${idKey}|${mode}|${mode === 'me' ? o.lat.toFixed(3) + ',' + o.lng.toFixed(3) : ''}`;
 
-  let routes = routeCache[key];
+  let routes = opts.keepDrive ? null : routeCache[key];
   if (!routes) {
     activeRoutes = [];
     const straight = [[o.lat, o.lng], [d.lat, d.lng]];
     paintCard(t, mode, o, d, null, 'Calculating optimal Dubai road route…');
     drawRoutes([{ line: straight }], 0, true);
-    fitRoute(straight);
+    if (!opts.keepDrive) fitRoute(straight);
 
     try {
       const url = `${ROUTER}/route/v1/driving/${o.lng},${o.lat};${d.lng},${d.lat}?overview=full&geometries=geojson&steps=true&alternatives=true`;
@@ -987,7 +1219,7 @@ async function showRoute(t, mode = routeMode) {
   activeRoutes = routes;
   drawRoutes(routes, 0, false);
   paintCard(t, mode, o, d, routes[0], mode === 'me' ? 'Live from your GPS position' : (routes.length > 1 ? `${routes.length} routes available` : 'Fastest route by road'));
-  fitRoute(routes[0].line);
+  if (!opts.keepDrive) fitRoute(routes[0].line);
 }
 
 function startDriveMode() {
@@ -1000,24 +1232,36 @@ function startDriveMode() {
     toast('GPS tracking is not supported on this browser.');
     return;
   }
-  toggleSheet(false);
+  toggleSheet(false, true);
   driveStepIdx = 0;
+  spokenFarStep = 0;
+  spokenCloseStep = -1;
+  offRouteStrikes = 0;
   lastSpokenText = '';
+
   const dest = endpoints(activeTarget, routeMode)[1];
   const rt = activeRoutes[activeAltIdx];
   const firstStep = rt.steps[0];
   const firstInstruction = firstStep ? stepText(firstStep) : `Drive to ${dest.name}`;
+  const firstDist = firstStep && firstStep.distance > 0 ? firstStep.distance : 0;
 
   $('app').classList.add('drive-on');
   $('drive-hud').hidden = false;
+  syncCalmMap();
   syncInstallPrompt();
+  acquireWakeLock();
+
   $('rc-drive-lbl').textContent = 'Driving…';
   $('hud-icon').innerHTML = maneuverSVG(firstStep ? firstStep.maneuver : {});
+  $('hud-dist').textContent = firstDist > 0 ? fmtStepDist(firstDist) : 'Start';
   $('hud-step').textContent = firstInstruction;
   $('hud-meta').textContent = `${fmtKm(rt.km)} · ${fmtMin(rt.min)} · Arrive ${fmtDubaiETA(rt.min)}`;
 
-  startGpsFollow('drive', 16);
-  speakTurn(`Starting route to ${dest.name}. ${firstInstruction}`, true);
+  startGpsFollow('drive', 16.5);
+  const spokenStart = firstDist > 50
+    ? `Starting route to ${dest.name}. In ${fmtVoiceDist(firstDist)}, ${firstInstruction}`
+    : `Starting route to ${dest.name}. ${firstInstruction}`;
+  speakTurn(spokenStart, true);
 }
 
 async function loadDriving() {
@@ -1101,6 +1345,7 @@ function initMap() {
     map.on('zoomend moveend', updateClusters);
     map.on('dragstart', () => {
       if (isFollowing) {
+        manualPanPause = true;
         setFollowActive(false);
         if (followMode === 'drive') toast('GPS follow paused — tap Recenter to resume');
       }
@@ -1149,10 +1394,11 @@ function locate() {
 $('theme-toggle').onclick = () => viewTransition(() => applyTheme(currentTheme === 'dark' ? 'light' : 'dark'));
 $('tool-recenter').onclick = () => {
   if (!mapReady) return;
+  manualPanPause = false;
   setFollowActive(true);
   startCompass();
-  if (userPos) flyTo([userPos.lat, userPos.lng], Math.max(map.getZoom(), 16));
-  else startGpsFollow(followMode || 'drive', 16);
+  if (userPos) flyTo([userPos.lat, userPos.lng], Math.max(map.getZoom(), 16.5));
+  else startGpsFollow(followMode || 'drive', 16.5);
   toast('Following your location');
 };
 $('tool-zoom-in').onclick = () => map?.zoomIn();
@@ -1167,6 +1413,18 @@ $('nav-locate').onclick = locate;
 $('rc-close').onclick = () => { clearRoute(); fitAll(); };
 $('rc-drive').onclick = startDriveMode;
 $('hud-stop').onclick = () => stopDriveMode(false);
+$('hud-repeat').onclick = repeatLastInstruction;
+$('hud-calm').onclick = () => {
+  calmMapEnabled = !calmMapEnabled;
+  syncCalmMap();
+  toast(calmMapEnabled ? 'Calm Drive Map enabled' : 'Full map detail restored');
+};
+$('hud-hq').onclick = () => {
+  const hqDest = { name: 'Algurg Corporate Office (Jebel Ali)', type: 'Headquarters', lat: HQ.lat, lng: HQ.lng, isCustom: true };
+  showRoute(hqDest, 'me', { keepDrive: true });
+  toast('Routing to Algurg HQ');
+  speakTurn('Routing to Algurg Headquarters', true);
+};
 $('hud-voice').onclick = () => {
   voiceEnabled = !voiceEnabled;
   updateVoiceUI();
@@ -1204,6 +1462,15 @@ document.addEventListener('click', e => {
   if (act === 'copy') copyText(`${HQ.lat}, ${HQ.lng}`);
   if (act === 'copy-custom' && customDest) copyText(`${customDest.lat.toFixed(6)}, ${customDest.lng.toFixed(6)}`);
   if (act === 'share-hq') copyText(`${location.origin}${location.pathname}`);
+});
+
+// Priority 3: Quick Driver Search Shortcuts (Petrol, Parking, Hospital, Metro, Mosque)
+document.querySelector('.driver-shortcuts')?.addEventListener('click', e => {
+  const b = e.target.closest('[data-drv]');
+  if (!b) return;
+  const term = b.dataset.drv;
+  $('q').value = term;
+  searchUAE(term);
 });
 
 $('q').addEventListener('input', e => {
@@ -1266,7 +1533,7 @@ async function updateCacheMeta() {
   try {
     const c = await caches.open('algurg-tiles-v7');
     const keys = await c.keys();
-    el.textContent = `Algurg Map v16 · ${keys.length} offline map tiles cached`;
+    el.textContent = `Algurg Map v17 · ${keys.length} offline map tiles cached`;
   } catch {}
 }
 const syncNet = () => {
