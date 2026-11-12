@@ -107,9 +107,10 @@ h1{font-size:1.125rem;line-height:1.25;font-weight:700;letter-spacing:-.01em;whi
   background:var(--ink);color:var(--bg);padding:var(--s3) var(--s4);border-radius:99px;font-weight:600;max-width:90%;text-align:center;transition:opacity .2s,transform .2s}
 .toast.show{opacity:1;transform:translate(-50%,0)}
 
-.pin-hit{display:grid;place-items:end center;min-width:44px;min-height:44px;cursor:pointer;transition:transform .15s}
-.pin-hit:hover{transform:scale(1.12)} .pin-hit:focus-visible{outline:3px solid var(--accent);border-radius:8px}
-.pin-hit.drop{animation:drop .45s cubic-bezier(.3,1.4,.5,1) both}
+.pin-hit{display:grid;place-items:end center;cursor:pointer;background:none;border:0}
+.pin-hit svg{transition:transform .15s;transform-origin:50% 100%;filter:drop-shadow(0 2px 3px rgba(0,0,0,.35))}
+.pin-hit:hover svg{transform:scale(1.12)}
+.pin-hit.drop svg{animation:drop .45s cubic-bezier(.3,1.4,.5,1) both}
 @keyframes drop{from{transform:translateY(-24px);opacity:0}}
 .me-dot{width:20px;height:20px;border-radius:50%;background:#2563eb;border:3px solid #fff;box-shadow:0 0 0 6px rgba(37,99,235,.25)}
 
@@ -132,3 +133,19 @@ h1{font-size:1.125rem;line-height:1.25;font-weight:700;letter-spacing:-.01em;whi
 @media (orientation:landscape) and (max-height:480px){.sheet{height:calc(100dvh - 150px)}}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
 @media print{.bottomnav,.sheet,.install{display:none}}
+
+.pin-fallback{width:20px;height:20px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:2px solid #fff}
+
+/* Leaflet integration */
+#map{z-index:0;background:var(--bg);font:inherit}
+.leaflet-container{font-family:var(--font)}
+.leaflet-bottom{margin-bottom:calc(env(safe-area-inset-bottom) + var(--nav-h) + var(--s5) + var(--s2))}
+.leaflet-touch .leaflet-bar a,.leaflet-bar a{width:44px;height:44px;line-height:44px;font-size:1.25rem}
+.leaflet-bar a,.leaflet-control-attribution{background:var(--surface)!important;color:var(--ink)!important}
+.leaflet-control-attribution{font-size:.75rem;padding:2px var(--s2)} .leaflet-control-attribution a{color:var(--accent)!important}
+.leaflet-popup-content-wrapper{background:var(--surface);color:var(--ink);border-radius:var(--r);padding:0;box-shadow:var(--shadow)}
+.leaflet-popup-tip{background:var(--surface)}
+.leaflet-popup-content{margin:0;width:auto!important;min-width:200px}
+.leaflet-container a.leaflet-popup-close-button{width:44px;height:44px;font-size:1.5rem;line-height:44px;color:var(--muted)}
+.leaflet-marker-icon:focus-visible{outline:3px solid var(--accent);border-radius:8px}
+@media (prefers-color-scheme:dark){.leaflet-tile-pane{filter:invert(1) hue-rotate(180deg) brightness(.92) contrast(.9)}}

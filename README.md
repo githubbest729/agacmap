@@ -1,7 +1,10 @@
 # Algurg Map Locator (PWA)
 Live: https://githubbest729.github.io/agacmap/
 
-1. Put the contents of this folder at the root of your repo (repo name: `agacmap`).
-2. In `index.html`, replace `YOUR_GOOGLE_MAPS_API_KEY` (enable Maps JavaScript API; restrict key to `githubbest729.github.io/*`).
-3. GitHub → Settings → Pages → Deploy from branch → `main` / root.
-4. Verify pin coordinates and set the exact Algurg office location (`HQ` in `js/app.js`).
+Free stack: Leaflet 1.9.4 (bundled in `vendor/leaflet`) + OpenStreetMap tiles. **No API key, no billing.**
+
+1. Upload the contents of this folder to the root of the `agacmap` repo.
+2. GitHub → Settings → Pages → Deploy from branch → `main` / root.
+3. Set the exact Algurg office coordinates in `js/app.js` (`HQ`).
+
+OSM tiles are for light use (see https://operations.osmfoundation.org/policies/tiles/). For heavy traffic, switch the tile URL to a provider such as MapTiler or Stadia.

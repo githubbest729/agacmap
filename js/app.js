@@ -1,5 +1,5 @@
 'use strict';
-/* Algurg Map Locator. POI coordinates come from the supplied Google Plus Codes (decoded to ~14 m cells)
+/* Algurg Map Locator (Leaflet + OpenStreetMap: no API key or billing needed). POI coordinates come from the supplied Google Plus Codes (decoded to ~14 m cells)
    or exact Google Maps URL values (Aster Medical Center, Atlantis Monorail, Aster Clinic Al Barsha). */
 /* >>> PASTE ALGURG'S EXACT LAT/LNG ON THE NEXT LINE (replace 25.0990 and 55.1640). <<<
    How: open Algurg in Google Maps, right-click its pin, click the "lat, lng" numbers at the top of the menu to copy.
@@ -55,12 +55,8 @@ const PLACES = [
 PLACES.forEach(p => { p.km = haversineKm(HQ, p); });
 PLACES.sort((a, b) => a.km - b.km); // closest first; list and markers share this order
 
-/* Advanced Markers require a Map ID. 'DEMO_MAP_ID' works for testing; for production create your own
-   (Google Cloud Console → Map Management → Create Map ID → JavaScript, Vector) and paste it here. */
-const MAP_ID = 'DEMO_MAP_ID';
-
 const $ = id => document.getElementById(id);
-let map, info, markers = [], hqMarker, mapReady = false, userMarker, AdvancedMarkerElement, PinElement;
+let map, markers = [], hqMarker, mapReady = false, userMarker;
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const dark = matchMedia('(prefers-color-scheme: dark)');
 
@@ -105,59 +101,73 @@ function popupHTML(p, isHQ) {
     <a href="${dir}" target="_blank" rel="noopener">Get directions</a></div>`;
 }
 
+/* ---------- Map (Leaflet + OpenStreetMap) ---------- */
+const flyTo = (ll, z) => reduceMotion ? map.setView(ll, z, { animate: false }) : map.flyTo(ll, z, { duration: 0.8 });
+
 function focusPlace(i) {
-  const p = PLACES[i];
-  if (!mapReady) { toast(p.name); return; }
+  const p = PLACES[i], m = markers[i];
+  if (!mapReady || !m) { toast(p.name); return; }
   toggleSheet(false);
-  map.panTo({ lat: p.lat, lng: p.lng });
-  if (map.getZoom() < 13) map.setZoom(14);
-  info.setContent(popupHTML(p)); info.open({ map, anchor: markers[i] });
+  flyTo([p.lat, p.lng], Math.max(map.getZoom(), 14));
+  m.openPopup();
 }
 
+// Fit the viewport to Algurg + every place, leaving room for the top bar and bottom nav
 function fitAll() {
   if (!mapReady) return;
-  const b = new google.maps.LatLngBounds();
-  PLACES.forEach(p => b.extend(p)); b.extend(HQ);
+  const b = L.latLngBounds([[HQ.lat, HQ.lng]]);
+  PLACES.forEach(p => b.extend([p.lat, p.lng]));
   const bar = document.querySelector('.bottomnav').offsetHeight + 12;
-  map.fitBounds(b, { top: 90, left: 24, right: 24, bottom: bar + 24 });
+  map.fitBounds(b, { paddingTopLeft: [24, 90], paddingBottomRight: [24, bar + 24], animate: !reduceMotion });
 }
 
-// Builds the DOM content of an Advanced Marker: a coloured pin inside a >=44px tap area
-function makePin(color, scale = 1.1) {
-  const wrap = document.createElement('div');
-  wrap.className = 'pin-hit' + (reduceMotion ? '' : ' drop');
-  wrap.appendChild(new PinElement({ background: color, borderColor: '#ffffff', glyphColor: '#ffffff', scale }).element);
-  return wrap;
+// Coloured SVG pin inside a >=44px tap area (animation lives on the inner svg so Leaflet's positioning isn't disturbed)
+function pinIcon(color, scale = 1) {
+  const w = Math.round(32 * scale), h = Math.round(40 * scale), bw = Math.max(w, 44), bh = Math.max(h, 44);
+  return L.divIcon({
+    className: 'pin-hit' + (reduceMotion ? '' : ' drop'),
+    iconSize: [bw, bh], iconAnchor: [bw / 2, bh], popupAnchor: [0, -h + 4],
+    html: `<svg width="${w}" height="${h}" viewBox="0 0 32 40" aria-hidden="true"><path d="M16 39C16 39 2 24 2 14a14 14 0 0 1 28 0c0 10-14 25-14 25z" fill="${color}" stroke="#fff" stroke-width="2.5"/><circle cx="16" cy="14" r="5" fill="#fff"/></svg>`
+  });
 }
 
-window.initMap = async function () {
+function initMap() {
+  if (typeof L === 'undefined') return window.mapFailed();
   try {
-    ({ AdvancedMarkerElement, PinElement } = await google.maps.importLibrary('marker'));
-    map = new google.maps.Map($('map'), {
-      center: HQ, zoom: 11, mapId: MAP_ID, disableDefaultUI: true, gestureHandling: 'greedy',
-      clickableIcons: false,
-      colorScheme: dark.matches ? google.maps.ColorScheme.DARK : google.maps.ColorScheme.LIGHT
-    });
-    info = new google.maps.InfoWindow({ maxWidth: 260 });
-    hqMarker = new AdvancedMarkerElement({ map, position: HQ, title: HQ.name, zIndex: 999,
-      content: makePin('#0b6e8a', 1.6), gmpClickable: true });
-    hqMarker.addListener('click', () => { info.setContent(popupHTML(HQ, true)); info.open({ map, anchor: hqMarker }); });
+    map = L.map('map', { center: [HQ.lat, HQ.lng], zoom: 11, zoomControl: false, zoomSnap: 0.25,
+      zoomAnimation: !reduceMotion, fadeAnimation: !reduceMotion, markerZoomAnimation: !reduceMotion });
+    L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+    const tiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19, crossOrigin: true,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors'
+    }).addTo(map);
+    const hideSkeleton = () => $('skeleton').classList.add('done');
+    tiles.once('load', hideSkeleton); setTimeout(hideSkeleton, 6000);
+    let warned = false;
+    tiles.on('tileerror', () => { if (!warned) { warned = true; toast(navigator.onLine ? 'Some map tiles failed to load' : 'Offline: showing saved map areas only'); } });
+
+    hqMarker = L.marker([HQ.lat, HQ.lng], { icon: pinIcon('#0b6e8a', 1.5), title: HQ.name, alt: HQ.name, zIndexOffset: 1000 })
+      .addTo(map).bindPopup(popupHTML(HQ, true), { maxWidth: 260 });
     markers = PLACES.map(p => {
-      const m = new AdvancedMarkerElement({ map, position: p, title: p.name,
-        content: makePin(CATS[p.cat].color), gmpClickable: true });
-      m.addListener('click', () => { info.setContent(popupHTML(p)); info.open({ map, anchor: m }); });
-      return m;
+      try {
+        return L.marker([p.lat, p.lng], { icon: pinIcon(CATS[p.cat].color), title: p.name, alt: p.name })
+          .addTo(map).bindPopup(popupHTML(p), { maxWidth: 260 });
+      } catch (e) { console.warn('Marker failed:', p.name, e); return null; }
     });
     mapReady = true;
-    google.maps.event.addListenerOnce(map, 'idle', () => $('skeleton').classList.add('done'));
     fitAll();
-    addEventListener('resize', () => setTimeout(fitAll, 250));
+    addEventListener('resize', () => { map.invalidateSize(); setTimeout(fitAll, 250); });
   } catch (err) { console.error(err); window.mapFailed(); }
-};
+}
 
-window.mapFailed = function () { $('skeleton').classList.add('done'); $('map-error').hidden = false; };
-window.gm_authFailure = window.mapFailed; // invalid/missing API key
-setTimeout(() => { if (!mapReady) window.mapFailed(); }, 12000);
+window.mapFailed = function () {
+  $('skeleton').classList.add('done');
+  const msg = document.querySelector('#map-error p');
+  if (msg) msg.textContent = 'The map library could not load. Reload the page, or browse the places list below.';
+  $('map-error').hidden = false;
+};
+initMap();
 
 /* ---------- Actions ---------- */
 function locate() {
@@ -167,18 +177,17 @@ function locate() {
   navigator.geolocation.getCurrentPosition(pos => {
     const c = { lat: pos.coords.latitude, lng: pos.coords.longitude };
     if (!userMarker) {
-      const dot = document.createElement('div'); dot.className = 'me-dot';
-      userMarker = new AdvancedMarkerElement({ map, position: c, title: 'You are here', content: dot });
+      userMarker = L.marker([c.lat, c.lng], { title: 'You are here', alt: 'You are here',
+        icon: L.divIcon({ className: '', html: '<div class="me-dot"></div>', iconSize: [20, 20], iconAnchor: [10, 10] }) }).addTo(map);
     }
-    userMarker.position = c; map.panTo(c); map.setZoom(14);
+    userMarker.setLatLng([c.lat, c.lng]); flyTo([c.lat, c.lng], 14);
   }, () => toast('Location blocked. Allow location access in your browser settings.'), { enableHighAccuracy: true, timeout: 10000 });
 }
 
 $('nav-list').onclick = () => toggleSheet();
 $('open-list-empty').onclick = () => toggleSheet(true);
 $('nav-fit').onclick = () => { toggleSheet(false); fitAll(); };
-$('nav-hq').onclick = () => { if (!mapReady) return; toggleSheet(false); map.panTo(HQ); map.setZoom(15);
-  info.setContent(popupHTML(HQ, true)); info.open({ map, anchor: hqMarker }); };
+$('nav-hq').onclick = () => { if (!mapReady) return; toggleSheet(false); flyTo([HQ.lat, HQ.lng], 15); hqMarker.openPopup(); };
 $('nav-locate').onclick = locate;
 $('q').addEventListener('input', e => renderList(e.target.value));
 $('list').addEventListener('click', e => { const b = e.target.closest('.item'); if (b) focusPlace(+b.dataset.i); });
