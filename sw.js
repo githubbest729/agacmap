@@ -1,5 +1,5 @@
-const VERSION = 'algurg-map-v12';
-const TILES = 'algurg-tiles-v5';
+const VERSION = 'algurg-map-v13';
+const TILES = 'algurg-tiles-v6';
 const SHELL = [
   './', 'index.html', 'manifest.json', 'css/styles.css', 'js/app.js',
   'assets/icon.svg', 'assets/fonts/inter-latin-wght-normal.woff2',

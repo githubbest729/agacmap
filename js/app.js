@@ -1,8 +1,8 @@
 'use strict';
-/* Algurg Map Locator & In-App Navigator (2026 PWA)
-   - Map Tiles: CARTO Voyager (Light) & Dark Matter (Dark) with user's CARTO Basemaps API key
-   - Routing & Turn-by-Turn: Free keyless OSRM public demo server
-   - Anywhere UAE Search & Reverse Geocoding: Free keyless Photon / OpenStreetMap API */
+/* Algurg Map Locator & In-App Navigator (2026 English Edition)
+   - Map Tiles: CARTO Dark Matter (dark_all) & Positron (light_all) with English labels + CARTO Basemaps API key
+   - Routing & Turn-by-Turn: Free keyless OSRM server with automatic UAE Arabic-to-English road translation
+   - Anywhere UAE Search & Reverse Geocoding: Photon / OpenStreetMap API forced to English (lang=en) */
 
 const HQ = { name: 'Algurg Automation and Controls', lat: 24.9999384, lng: 55.1300456 };
 (() => {
@@ -29,6 +29,135 @@ function fmtDubaiETA(min) {
   } catch {
     return '+' + fmtMin(min);
   }
+}
+
+/* ---------- Automatic Dubai / UAE Arabic-to-English Road Name Translator ---------- */
+const UAE_ROADS = {
+  'شارع الشيخ زايد': 'Sheikh Zayed Rd',
+  'شارع الشيخ محمد بن زايد': 'Sheikh Mohammed Bin Zayed Rd',
+  'شارع الخيل': 'Al Khail Rd',
+  'شارع الإمارات': 'Emirates Rd',
+  'شارع الأصايل': 'Al Asayel St',
+  'شارع أبراج الميناء': 'Mina Towers St',
+  'شارع جميرا': 'Jumeirah St',
+  'شارع الوصل': 'Al Wasl Rd',
+  'شارع حصة': 'Hessa St',
+  'شارع أم سقيم': 'Umm Suqeim St',
+  'شارع الميدان': 'Al Meydan St',
+  'شارع الرباط': 'Al Rebat St',
+  'شارع المطار': 'Airport Rd',
+  'شارع الاتحاد': 'Al Ittihad Rd',
+  'شارع الصفوح': 'Al Sufouh Rd',
+  'شارع المركز المالي': 'Financial Center St',
+  'شارع بوليفارد الشيخ محمد بن راشد': 'Sheikh Mohammed bin Rashid Blvd',
+  'طريق دبي - العين': 'Dubai - Al Ain Rd',
+  'طريق جبل علي - لهباب': 'Jebel Ali - Lehbab Rd',
+  'شارع اليلايس': 'Al Yalayis St',
+  'شارع القرن': 'Al Qarn St',
+  'شارع سيح شعيب': 'Saih Shuaib St',
+  'شارع إكسبو': 'Expo Rd',
+  'شارع القدرة': 'Al Qudra Rd',
+  'شارع ند الحمر': 'Nad Al Hamar Rd',
+  'شارع راس الخور': 'Ras Al Khor Rd',
+  'شارع عود ميثاء': 'Oud Metha Rd',
+  'شارع الخليج': 'Al Khaleej St',
+  'شارع بني ياس': 'Baniyas Rd',
+  'شارع الرقة': 'Al Rigga Rd',
+  'شارع الضيافة': '2nd December St',
+  'شارع المستقبل': 'Al Mustaqbal St',
+  'شارع السعادة': 'Al Saada St',
+  'شارع المركز التجاري': 'Trade Centre St',
+  'شارع الكفاف': 'Al Kifaf St',
+  'شارع الحديقة': 'Al Hadiqa St',
+  'شارع المنارة': 'Al Manara St',
+  'شارع الثنية': 'Al Thowima St',
+  'شارع النسيم': 'Al Naseem St',
+  'شارع البحيرات': 'Lakes St',
+  'شارع السيف': 'Al Seef St',
+  'شارع الغرب': 'Al Gharb St',
+  'شارع الشرق': 'Al Sharq St',
+  'شارع الشمال': 'Al Shamal St',
+  'شارع الجنوب': 'Al Janoub St',
+  'شارع الصناعية': 'Industrial St',
+  'شارع جبل علي': 'Jebel Ali St',
+  'شارع الميناء': 'Al Mina Rd'
+};
+
+const AR_WORDS = {
+  'الشيخ': 'Sheikh', 'زايد': 'Zayed', 'محمد': 'Mohammed', 'راشد': 'Rashid', 'مكتوم': 'Maktoum',
+  'خليفة': 'Khalifa', 'حمدان': 'Hamdan', 'سلطان': 'Sultan', 'أبراج': 'Towers', 'برج': 'Tower',
+  'الميناء': 'Mina', 'ميناء': 'Port', 'دبي': 'Dubai', 'أبوظبي': 'Abu Dhabi', 'الشارقة': 'Sharjah',
+  'جبل': 'Jebel', 'علي': 'Ali', 'البرشاء': 'Al Barsha', 'مارينا': 'Marina', 'جميرا': 'Jumeirah',
+  'الخليج': 'Gulf', 'التجاري': 'Business', 'المركز': 'Center', 'المالي': 'Financial',
+  'حديقة': 'Park', 'الحديقة': 'Al Hadiqa', 'الواحة': 'Oasis', 'النخيل': 'Palm', 'المطار': 'Airport',
+  'المحطة': 'Station', 'الجسر': 'Bridge', 'النفق': 'Tunnel', 'الدوار': 'Roundabout',
+  'الصناعية': 'Industrial', 'المنطقة': 'Area', 'المدينة': 'City', 'القوز': 'Al Quoz',
+  'ديرة': 'Deira', 'بر': 'Bur', 'الكرامة': 'Al Karama', 'السطوة': 'Al Satwa', 'الوصل': 'Al Wasl',
+  'الصفوح': 'Al Sufouh', 'المرابع': 'Ranches', 'العربية': 'Arabian', 'تلال': 'Hills', 'الإمارات': 'Emirates',
+  'الخيل': 'Al Khail', 'الأصايل': 'Al Asayel', 'الفرسان': 'Al Fursan', 'المستقبل': 'Al Mustaqbal',
+  'السعادة': 'Al Saada', 'الاتحاد': 'Al Ittihad', 'السلام': 'Al Salam', 'الأمل': 'Al Amal',
+  'النور': 'Al Noor', 'الهدى': 'Al Huda', 'الزهراء': 'Al Zahra', 'النهضة': 'Al Nahda',
+  'الورقاء': 'Al Warqa', 'مردف': 'Mirdif', 'الخوانيج': 'Al Khawaneej', 'العوير': 'Al Awir',
+  'حتا': 'Hatta', 'ليوا': 'Liwa', 'العين': 'Al Ain', 'بن': 'Bin', 'بنت': 'Bint', 'أبو': 'Abu', 'أم': 'Umm'
+};
+
+const AR_CHARS = {
+  'ا': 'a', 'أ': 'a', 'إ': 'i', 'آ': 'aa', 'ب': 'b', 'ت': 't', 'ث': 'th',
+  'ج': 'j', 'ح': 'h', 'خ': 'kh', 'د': 'd', 'ذ': 'dh', 'ر': 'r', 'ز': 'z',
+  'س': 's', 'ش': 'sh', 'ص': 's', 'ض': 'd', 'ط': 't', 'ظ': 'z', 'ع': 'a',
+  'غ': 'gh', 'ف': 'f', 'ق': 'q', 'ك': 'k', 'ل': 'l', 'م': 'm', 'ن': 'n',
+  'ه': 'h', 'ة': 'a', 'و': 'w', 'ؤ': 'u', 'ي': 'y', 'ى': 'a', 'ئ': 'i', 'ء': '',
+  '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4', '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9'
+};
+
+function transliterateWord(w) {
+  if (AR_WORDS[w]) return AR_WORDS[w];
+  let prefix = '';
+  let core = w;
+  if (core.startsWith('ال') && core.length > 3) {
+    prefix = 'Al ';
+    core = core.slice(2);
+    if (AR_WORDS['ال' + core]) return AR_WORDS['ال' + core];
+    if (AR_WORDS[core]) return prefix + AR_WORDS[core];
+  }
+  let out = '';
+  for (let i = 0; i < core.length; i++) {
+    const ch = core[i];
+    if (/[\u064B-\u065F\u0670]/.test(ch)) continue; // strip diacritics
+    out += AR_CHARS[ch] !== undefined ? AR_CHARS[ch] : ch;
+  }
+  out = out.replace(/^a+/, 'a').replace(/(.)\1+/g, '$1');
+  if (!out) return '';
+  return prefix + out.charAt(0).toUpperCase() + out.slice(1);
+}
+
+function toEnglishRoad(raw) {
+  if (!raw) return '';
+  let s = String(raw).trim();
+  // Remove Arabic characters inside mixed labels if English is already provided alongside (e.g. "Sheikh Zayed Rd - شارع الشيخ زايد")
+  if (/[A-Za-z]/.test(s) && /[\u0600-\u06FF]/.test(s)) {
+    const cleaned = s.replace(/[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]+/g, ' ')
+      .replace(/[-–—/|()]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (cleaned.length >= 2) return cleaned;
+  }
+  if (!/[\u0600-\u06FF]/.test(s)) return s;
+  if (UAE_ROADS[s]) return UAE_ROADS[s];
+
+  let suffix = '';
+  if (s.startsWith('شارع ')) { s = s.slice(5).trim(); suffix = ' St'; }
+  else if (s.startsWith('طريق ')) { s = s.slice(5).trim(); suffix = ' Rd'; }
+  else if (s.startsWith('جسر ')) { s = s.slice(4).trim(); suffix = ' Bridge'; }
+  else if (s.startsWith('نفق ')) { s = s.slice(4).trim(); suffix = ' Tunnel'; }
+  else if (s.startsWith('دوار ')) { s = s.slice(5).trim(); suffix = ' Roundabout'; }
+  else if (s.startsWith('تقاطع ')) { s = s.slice(6).trim(); suffix = ' Interchange'; }
+  else if (s.startsWith('مخرج ')) { s = s.slice(5).trim(); return 'Exit ' + s.split(/\s+/).map(transliterateWord).join(' '); }
+  else if (s.startsWith('ممشى ')) { s = s.slice(5).trim(); suffix = ' Walk'; }
+  else if (s.startsWith('كورنيش ')) { s = s.slice(7).trim(); suffix = ' Corniche'; }
+
+  const englishName = s.split(/\s+/).map(w => /[\u0600-\u06FF]/.test(w) ? transliterateWord(w) : w).filter(Boolean).join(' ');
+  return (englishName + suffix).trim();
 }
 
 const CATS = {
@@ -94,13 +223,13 @@ function loadSavedDrive() {
 }
 loadSavedDrive(); resort();
 
-/* ---------- Map Tile Providers (User's CARTO Basemaps Key Preserved) ---------- */
+/* ---------- Map Tile Providers (English Labels in Both Dark & Light Modes) ---------- */
 const CARTO_KEY = 'cb1_57cr_1_f31ce75418c7d6e7e9f3426f';
 const OSM_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors';
 const CARTO_ATTR = OSM_ATTR + ' &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>';
 const CARTO_URLS = {
   dark:  `https://basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png?key=${CARTO_KEY}`,
-  light: `https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png?key=${CARTO_KEY}`
+  light: `https://basemaps.cartocdn.com/rastertiles/light_all/{z}/{x}/{y}.png?key=${CARTO_KEY}`
 };
 
 const $ = id => document.getElementById(id);
@@ -188,7 +317,7 @@ async function searchUAE(query) {
   lbl.textContent = 'Searching Dubai & UAE…';
   wrap.hidden = false;
   try {
-    const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&lat=${HQ.lat}&lon=${HQ.lng}&limit=6`;
+    const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&lat=${HQ.lat}&lon=${HQ.lng}&lang=en&limit=6`;
     const j = await fetchJSON(url);
     const feats = (j.features || []).filter(ft => {
       const cc = ft.properties && ft.properties.countrycode;
@@ -197,8 +326,10 @@ async function searchUAE(query) {
     geoResults = feats.map(ft => {
       const [lng, lat] = ft.geometry.coordinates;
       const pr = ft.properties || {};
-      const name = pr.name || pr.street || 'Dubai Location';
-      const sub = [pr.district || pr.suburb || pr.city, pr.state].filter(Boolean).join(', ') || 'United Arab Emirates';
+      const rawName = pr.name || pr.street || 'Dubai Location';
+      const name = toEnglishRoad(rawName) || 'Dubai Location';
+      const subParts = [pr.district || pr.suburb || pr.city, pr.state].filter(Boolean).map(toEnglishRoad);
+      const sub = subParts.join(', ') || 'Dubai, United Arab Emirates';
       const km = haversineKm(HQ, { lat, lng }) * ROAD_FACTOR;
       const min = Math.max(1, Math.round(km / AVG_KMH * 60));
       return { name, type: sub, lat, lng, km, min, isCustom: true };
@@ -372,9 +503,11 @@ function maneuverSVG(m = {}) {
 }
 
 function stepText(st) {
-  const m = st.maneuver || {}, mod = m.modifier || '', name = st.name ? ` onto ${esc(st.name)}` : '';
+  const m = st.maneuver || {}, mod = m.modifier || '';
+  const roadEn = toEnglishRoad(st.name);
+  const name = roadEn ? ` onto ${esc(roadEn)}` : '';
   switch (m.type) {
-    case 'depart': return `Head ${compass(m.bearing_after ?? 0)}${st.name ? ' on ' + esc(st.name) : ''}`;
+    case 'depart': return `Head ${compass(m.bearing_after ?? 0)}${roadEn ? ' on ' + esc(roadEn) : ''}`;
     case 'arrive': return 'Arrive at destination';
     case 'turn': return `Turn ${mod || 'ahead'}${name}`;
     case 'end of road': return `Turn ${mod || 'ahead'} at end of road${name}`;
@@ -447,7 +580,6 @@ function paintCard(t, mode, o, d, r, note) {
   $('rc-to').textContent = d.name;
   card.querySelectorAll('[data-mode]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mode === mode)));
 
-  // Alternative route pills
   const altsBox = $('rc-alts');
   if (activeRoutes.length > 1) {
     altsBox.hidden = false;
@@ -482,7 +614,7 @@ function paintCard(t, mode, o, d, r, note) {
   $('rc-ext').href = `https://www.google.com/maps/dir/?api=1&origin=${o.lat},${o.lng}&destination=${d.lat},${d.lng}&travelmode=driving`;
   card.hidden = false;
   $('app').classList.add('route-on');
-  map?.closePopup(); // Keep route line & card 100% unobstructed
+  map?.closePopup();
 }
 
 async function showRoute(t, mode = routeMode) {
@@ -666,17 +798,18 @@ function initMap() {
       }
     });
 
-    // Tap anywhere on the map to drop a destination pin and route from Algurg
+    // Tap anywhere on the map to drop a destination pin and route in English
     map.on('click', async e => {
       const { lat, lng } = e.latlng;
       const dest = { name: 'Dropped Pin', type: `${lat.toFixed(5)}, ${lng.toFixed(5)}`, lat, lng, isCustom: true };
       setCustomPin(dest, true);
       try {
-        const j = await fetchJSON(`https://photon.komoot.io/reverse?lat=${lat}&lon=${lng}`);
+        const j = await fetchJSON(`https://photon.komoot.io/reverse?lat=${lat}&lon=${lng}&lang=en`);
         const pr = j.features && j.features[0] && j.features[0].properties;
         if (pr && (pr.name || pr.street || pr.district)) {
-          dest.name = pr.name || pr.street || pr.district;
-          dest.type = [pr.district || pr.suburb, pr.city || 'Dubai'].filter(Boolean).join(', ');
+          dest.name = toEnglishRoad(pr.name || pr.street || pr.district) || 'Dropped Pin';
+          const sub = [pr.district || pr.suburb, pr.city || 'Dubai'].filter(Boolean).map(toEnglishRoad).join(', ');
+          dest.type = sub || 'Dubai, United Arab Emirates';
           setCustomPin(dest, true);
         }
       } catch {}
@@ -791,7 +924,6 @@ addEventListener('keydown', e => {
 buildChips();
 renderList();
 
-// Handle shared URL parameters (?place=... or ?dest=lat,lng&name=...)
 const qp = new URLSearchParams(location.search);
 const sharedMode = qp.get('mode') === 'to' ? 'to' : 'from';
 const sharedI = PLACES.findIndex(p => p.name === qp.get('place'));
