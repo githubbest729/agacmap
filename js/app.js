@@ -387,16 +387,27 @@ async function searchUAE(query) {
   renderList(query);
 }
 
-function toggleSheet(open) {
+function toggleSheet(open, instant = false) {
   const s = $('sheet');
   const on = open ?? !s.classList.contains('open');
-  if (s.classList.contains('open') === on) return;
-  viewTransition(() => {
+  if (s.classList.contains('open') === on) {
+    syncInstallPrompt();
+    return;
+  }
+  const apply = () => {
+    if (instant) s.style.transition = 'none';
     s.classList.toggle('open', on);
     s.setAttribute('aria-hidden', String(!on));
     $('app').classList.toggle('sheet-open', on);
     $('nav-list').setAttribute('aria-pressed', String(on));
-  });
+    syncInstallPrompt();
+    if (instant) {
+      void s.offsetWidth;
+      s.style.transition = '';
+    }
+  };
+  if (instant) apply();
+  else viewTransition(apply);
   if (on) setTimeout(() => $('q').focus({ preventScroll: true }), 260);
 }
 
@@ -672,6 +683,7 @@ function stopGpsFollow() {
   }
   stopCompass();
   followMode = null;
+  $('app').classList.remove('gps-follow');
   setFollowActive(false);
 }
 
@@ -792,6 +804,7 @@ function startGpsFollow(mode, zoomTarget = null) {
     gpsWatchId = null;
   }
   followMode = mode;
+  $('app').classList.add('gps-follow');
   setFollowActive(true);
   startCompass();
 
@@ -826,6 +839,7 @@ function stopDriveMode(silent = false) {
   $('drive-hud').hidden = true;
   $('app').classList.remove('drive-on');
   $('rc-drive-lbl').textContent = 'Start Drive';
+  syncInstallPrompt();
   if (!silent) toast('Navigation ended');
 }
 
@@ -840,7 +854,11 @@ function clearRoute() {
     viewTransition(() => {
       card.hidden = true;
       $('app').classList.remove('route-on');
+      syncInstallPrompt();
     });
+  } else {
+    $('app').classList.remove('route-on');
+    syncInstallPrompt();
   }
   map?.closePopup();
   updateClusters();
@@ -897,16 +915,18 @@ function paintCard(t, mode, o, d, r, note) {
     viewTransition(() => {
       card.hidden = false;
       $('app').classList.add('route-on');
+      syncInstallPrompt();
     });
   } else {
     $('app').classList.add('route-on');
+    syncInstallPrompt();
   }
   map?.closePopup();
 }
 
 async function showRoute(t, mode = routeMode) {
   if (!mapReady) return;
-  toggleSheet(false);
+  toggleSheet(false, true);
   stopDriveMode(true);
   if (followMode === 'near') stopGpsFollow();
   const seq = ++routeSeq;
@@ -990,6 +1010,7 @@ function startDriveMode() {
 
   $('app').classList.add('drive-on');
   $('drive-hud').hidden = false;
+  syncInstallPrompt();
   $('rc-drive-lbl').textContent = 'Driving…';
   $('hud-icon').innerHTML = maneuverSVG(firstStep ? firstStep.maneuver : {});
   $('hud-step').textContent = firstInstruction;
@@ -1245,7 +1266,7 @@ async function updateCacheMeta() {
   try {
     const c = await caches.open('algurg-tiles-v7');
     const keys = await c.keys();
-    el.textContent = `Algurg Map v15 · ${keys.length} offline map tiles cached`;
+    el.textContent = `Algurg Map v16 · ${keys.length} offline map tiles cached`;
   } catch {}
 }
 const syncNet = () => {
@@ -1256,22 +1277,37 @@ addEventListener('online', syncNet);
 addEventListener('offline', syncNet);
 syncNet();
 
-/* ---------- Install Prompt ---------- */
-let deferred;
+/* ---------- Install Prompt (strictly hidden over sheet, route card, or drive HUD) ---------- */
+let deferred, installEligible = false;
 const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
 const dismissed = () => { try { return localStorage.getItem('installDismissed') === '1'; } catch { return false; } };
+function syncInstallPrompt() {
+  const el = $('install'), appEl = $('app');
+  if (!el || !appEl) return;
+  const blocked = standalone || dismissed() || !installEligible ||
+    appEl.classList.contains('sheet-open') ||
+    appEl.classList.contains('route-on') ||
+    appEl.classList.contains('drive-on');
+  el.hidden = blocked;
+}
 const showInstall = () => {
-  if (!standalone && !dismissed() && !$('app').classList.contains('route-on') && !$('app').classList.contains('sheet-open') && !$('app').classList.contains('drive-on')) {
-    $('install').hidden = false;
+  if (!standalone && !dismissed()) {
+    installEligible = true;
+    syncInstallPrompt();
   }
 };
 addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferred = e; setTimeout(showInstall, 4000); });
-addEventListener('appinstalled', () => { $('install').hidden = true; toast('Installed on your home screen!'); });
+addEventListener('appinstalled', () => { installEligible = false; syncInstallPrompt(); toast('Installed on your home screen!'); });
 $('install-yes').onclick = async () => {
   if (deferred) { deferred.prompt(); await deferred.userChoice; deferred = null; }
-  $('install').hidden = true;
+  installEligible = false;
+  syncInstallPrompt();
 };
-$('install-no').onclick = () => { $('install').hidden = true; try { localStorage.setItem('installDismissed', '1'); } catch {} };
+$('install-no').onclick = () => {
+  installEligible = false;
+  try { localStorage.setItem('installDismissed', '1'); } catch {}
+  syncInstallPrompt();
+};
 if (/iphone|ipad|ipod/i.test(navigator.userAgent) && !standalone) {
   $('install-text').textContent = 'Tap Share, then “Add to Home Screen”.';
   $('install-yes').textContent = 'Got it';

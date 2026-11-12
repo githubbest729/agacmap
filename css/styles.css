@@ -150,6 +150,7 @@ h1{font-size:1.05rem;line-height:1.25;font-weight:700;letter-spacing:-.01em;whit
 .next-ico svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
 
 .rc-note{font-size:.8125rem;color:var(--muted)} .rc-note:empty{display:none}
+.rc-voice-hint{font-size:.75rem;color:var(--muted);display:flex;align-items:center;gap:6px;opacity:.9}
 .steps summary{min-height:38px;display:flex;align-items:center;font-size:.875rem;font-weight:700;cursor:pointer;color:var(--accent);user-select:none}
 .steps ol{list-style:none;margin:0;padding:0 0 var(--s1);max-height:24dvh;overflow:auto;overscroll-behavior:contain}
 .steps li{display:flex;align-items:center;gap:var(--s2);padding:var(--s2) 0;border-bottom:1px solid var(--line);font-size:.85rem}
@@ -177,12 +178,12 @@ h1{font-size:1.05rem;line-height:1.25;font-weight:700;letter-spacing:-.01em;whit
 .icon-btn svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 
 /* Install Prompt — auto-hides when route-card, sheet, or drive-hud is active */
-.install{position:absolute;z-index:7;left:var(--s3);right:var(--s3);margin:0 auto;max-width:500px;
+.install{position:absolute;z-index:6;left:var(--s3);right:var(--s3);margin:0 auto;max-width:500px;
   bottom:calc(env(safe-area-inset-bottom) + var(--nav-h) + var(--s4));
   display:grid;grid-template-columns:auto 1fr;gap:var(--s3);align-items:center;padding:var(--s3) var(--s4);
   background:var(--glass);border:1px solid var(--glass-line);border-radius:var(--r);box-shadow:var(--shadow);
   -webkit-backdrop-filter:blur(18px) saturate(1.5);backdrop-filter:blur(18px) saturate(1.5);animation:up .35s ease-out}
-.install[hidden],#app.route-on .install,#app.sheet-open .install,#app.drive-on .install{display:none!important}
+.install[hidden],#app.route-on .install,#app.sheet-open .install,#app.drive-on .install{display:none!important;visibility:hidden!important}
 .install img{border-radius:var(--r-sm)} .install p{font-size:.8125rem;color:var(--muted)}
 .install .btn{grid-column:1/-1;justify-self:stretch}
 @media (min-width:480px){.install{grid-template-columns:auto 1fr auto auto}.install .btn{grid-column:auto}}
@@ -251,8 +252,8 @@ h1{font-size:1.05rem;line-height:1.25;font-weight:700;letter-spacing:-.01em;whit
 #map.map-rotated .pin-hit:hover svg,
 #map.map-rotated .pin-hit.active svg{transform:rotate(calc(-1 * var(--map-rot,0deg))) scale(1.16)}
 
-.recenter-btn{display:none;color:var(--accent)}
-#app.drive-on .recenter-btn{display:inline-grid}
+.recenter-btn{display:none;color:var(--accent);border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}
+#app.gps-follow .recenter-btn,#app.drive-on .recenter-btn{display:inline-grid}
 .recenter-btn[aria-pressed=true]{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
 
 .voice-btn{min-height:38px;padding:0 var(--s3);font-size:.78rem;gap:5px;flex:none}
@@ -261,9 +262,10 @@ h1{font-size:1.05rem;line-height:1.25;font-weight:700;letter-spacing:-.01em;whit
 
 /* Leaflet Popups & Uncramped Attribution */
 .leaflet-container{font-family:var(--font)}
-.leaflet-bottom{margin-bottom:calc(env(safe-area-inset-bottom) + var(--nav-h) + var(--s3))}
-.leaflet-control-attribution{background:var(--glass)!important;color:var(--muted)!important;font-size:.65rem;padding:2px 8px;
-  border-radius:10px 0 0 0;max-width:52vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.75}
+.leaflet-bottom{margin-bottom:calc(env(safe-area-inset-bottom) + var(--nav-h) + var(--s5))}
+.leaflet-control-attribution{background:var(--glass)!important;color:var(--muted)!important;font-size:.65rem;padding:3px 9px;
+  margin:0 var(--s3) var(--s1) 0!important;border:1px solid var(--glass-line);border-radius:99px;
+  max-width:54vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.8}
 .leaflet-control-attribution a{color:var(--accent)!important}
 @media (max-width:767px){#app.route-on .leaflet-control-attribution{display:none}}
 .leaflet-popup-content-wrapper{background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:var(--r);padding:0;box-shadow:var(--shadow)}
