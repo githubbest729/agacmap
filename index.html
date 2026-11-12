@@ -47,6 +47,7 @@
       <div class="shimmer"></div>
       <p>Loading map…</p>
     </div>
+    <button id="clear-route" class="btn route-clear" hidden>Clear route</button>
     <div id="map-error" class="empty" hidden>
       <h2>Map unavailable</h2>
       <p>You can still browse all places in the list.</p>
@@ -66,7 +67,7 @@
 
   <section id="sheet" class="sheet" aria-hidden="true" aria-label="Places list">
     <div class="grab" aria-hidden="true"></div>
-    <div class="sheet-head"><h2>Closest to Algurg</h2><p>Straight-line distance, nearest first</p></div>
+    <div class="sheet-head"><h2>Closest to Algurg</h2><p id="sheet-sub">Driving distance and time from Algurg, nearest first</p></div>
     <label class="search">
       <span class="sr">Search places</span>
       <input id="q" type="search" placeholder="Search places or categories" autocomplete="off" enterkeyhint="search">

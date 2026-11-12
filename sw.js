@@ -1,4 +1,4 @@
-const VERSION = 'algurg-map-v9';
+const VERSION = 'algurg-map-v10';
 const TILES = 'algurg-tiles-v4';
 const SHELL = ['./', 'index.html', 'manifest.json', 'css/styles.css', 'js/app.js',
   'assets/icon.svg', 'assets/fonts/inter-latin-wght-normal.woff2', 'vendor/leaflet/leaflet.js', 'vendor/leaflet/leaflet.css',

@@ -149,3 +149,14 @@ h1{font-size:1.125rem;line-height:1.25;font-weight:700;letter-spacing:-.01em;whi
 .leaflet-container a.leaflet-popup-close-button{width:44px;height:44px;font-size:1.5rem;line-height:44px;color:var(--muted)}
 .leaflet-marker-icon:focus-visible{outline:3px solid var(--accent);border-radius:8px}
 @media (prefers-color-scheme:dark){.leaflet-tile-pane{filter:invert(1) hue-rotate(180deg) brightness(.92) contrast(.9)}}
+
+/* ===== Routing ===== */
+.km{display:flex;flex-direction:column;align-items:flex-end;border-radius:14px;line-height:1.25;padding:var(--s1) var(--s3);text-align:right}
+.km b{font-weight:700} .km i{font-style:normal;font-weight:500;color:var(--muted);font-size:.8125rem}
+.route-casing{stroke:var(--surface);stroke-width:10;stroke-opacity:.95;stroke-linecap:round;stroke-linejoin:round;fill:none}
+.route-line{stroke:var(--accent);stroke-width:5;stroke-linecap:round;stroke-linejoin:round;fill:none}
+.route-line.est{stroke-dasharray:2 10}
+.route-clear{position:absolute;z-index:6;left:calc(env(safe-area-inset-left) + var(--s2));top:calc(env(safe-area-inset-top) + 76px);
+  border-radius:99px;box-shadow:var(--shadow)}
+.route-clear[hidden]{display:none}
+@media (min-width:768px){.route-clear{left:var(--s5);top:calc(var(--s5) + 68px)}}
