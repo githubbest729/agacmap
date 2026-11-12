@@ -1,12 +1,9 @@
 'use strict';
 /* Algurg Map Locator (Leaflet + CARTO/OpenStreetMap tiles: no API key or billing needed). POI coordinates come from the supplied Google Plus Codes (decoded to ~14 m cells)
    or exact Google Maps URL values (Aster Medical Center, Atlantis Monorail, Aster Clinic Al Barsha). */
-/* >>> PASTE ALGURG'S EXACT LAT/LNG ON THE NEXT LINE (replace 25.0990 and 55.1640). <<<
-   How: open Algurg in Google Maps, right-click its pin, click the "lat, lng" numbers at the top of the menu to copy.
-   NOTE: https://maps.app.goo.gl/zwPVNuzgspFVWzuF8 opens "Dubai World Trade Centre" (25.2233459, 55.2869344),
-   not Algurg, so it was NOT used. All distances are measured from this point.
+/* Algurg Automation and Controls, Corporate Office, Jebel Ali (exact coordinates).
    Temporary test override: add ?hq=25.1234,55.1234 to the page URL. */
-const HQ = { name: 'Algurg Automation and Controls', lat: 25.0990, lng: 55.1640 };
+const HQ = { name: 'Algurg Automation and Controls', lat: 24.9999384, lng: 55.1300456 };
 (() => { const o = new URLSearchParams(location.search).get('hq'); if (o) { const [a, b] = o.split(',').map(Number);
   if (isFinite(a) && isFinite(b)) { HQ.lat = a; HQ.lng = b; } } })();
 
@@ -17,7 +14,7 @@ function haversineKm(a, b) {
   const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
   return 2 * R * Math.asin(Math.sqrt(h));
 }
-const fmtKm = km => (km < 10 ? km.toFixed(1) : Math.round(km)) + ' km';
+const fmtKm = km => (km < 100 ? km.toFixed(1) : Math.round(km)) + ' km';
 
 const CATS = {
   landmark: { label: 'Landmark', color: '#c2410c' },
@@ -53,7 +50,23 @@ const PLACES = [
 ];
 
 PLACES.forEach(p => { p.km = haversineKm(HQ, p); });
-PLACES.sort((a, b) => a.km - b.km); // closest first; list and markers share this order
+PLACES.sort((a, b) => a.km - b.km); // fixed marker order; the list order is `order` below
+
+/* ---------- Driving distance & time (OSRM public demo server: free, no key, fair-use only) ---------- */
+const ROUTER = 'https://router.project-osrm.org';
+const ROAD_FACTOR = 1.3, AVG_KMH = 50;      // used for estimates until/unless real road data arrives
+const DRIVE_KEY = `algurgDrive:${HQ.lat},${HQ.lng}`;
+const road = p => p.drive || { km: p.km * ROAD_FACTOR, min: Math.max(1, Math.round(p.km * ROAD_FACTOR / AVG_KMH * 60)), est: true };
+const fmtMin = m => m < 60 ? `${m} min` : `${Math.floor(m / 60)} hr${m % 60 ? ' ' + (m % 60) + ' min' : ''}`;
+let order = PLACES.map((_, i) => i);
+function resort() { order.sort((a, b) => { const x = road(PLACES[a]), y = road(PLACES[b]); return x.km - y.km || x.min - y.min; }); }
+function saveDrive() {
+  try { const o = {}; PLACES.forEach(p => { if (p.drive) o[p.name] = p.drive; }); localStorage.setItem(DRIVE_KEY, JSON.stringify(o)); } catch {}
+}
+function loadSavedDrive() {
+  try { const o = JSON.parse(localStorage.getItem(DRIVE_KEY) || '{}'); PLACES.forEach(p => { if (o[p.name]) p.drive = o[p.name]; }); } catch {}
+}
+loadSavedDrive(); resort();
 
 /* ---------- Map tile provider (pick one; all render English/Latin labels) ----------
    'carto'  : CARTO Voyager. No key. Check CARTO's terms before commercial use.
@@ -82,18 +95,31 @@ function toast(msg) {
 const esc = s => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 /* ---------- Places list ---------- */
+let catFilter = 'all';
+function buildChips() {
+  const box = $('chips');
+  const defs = [['all', 'All'], ...['business', 'transit', 'health', 'shopping', 'leisure', 'landmark'].map(k => [k, CATS[k].label])];
+  box.innerHTML = defs.map(([k, l]) => `<button class="chip-btn" data-cat="${k}" aria-pressed="${k === 'all'}">${l}</button>`).join('');
+  box.addEventListener('click', e => {
+    const b = e.target.closest('.chip-btn'); if (!b) return;
+    catFilter = b.dataset.cat;
+    box.querySelectorAll('.chip-btn').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    renderList($('q').value);
+  });
+}
 function renderList(filter = '') {
   const f = filter.trim().toLowerCase();
   const ul = $('list'); ul.innerHTML = '';
-  const items = PLACES.map((p, i) => ({ p, i })).filter(({ p }) =>
-    !f || (p.name + ' ' + p.type + ' ' + CATS[p.cat].label).toLowerCase().includes(f));
-  items.forEach(({ p, i }) => {
+  const items = order.map((i, n) => ({ p: PLACES[i], i, n })).filter(({ p }) =>
+    (catFilter === 'all' || p.cat === catFilter) &&
+    (!f || (p.name + ' ' + p.type + ' ' + CATS[p.cat].label).toLowerCase().includes(f)));
+  items.forEach(({ p, i, n }) => {
     const li = document.createElement('li');
-    li.style.setProperty('--i', Math.min(i, 16));
+    li.style.setProperty('--i', Math.min(n, 16));
     li.innerHTML = `<button class="item" data-i="${i}">
       <span class="dot" style="background:${CATS[p.cat].color}" aria-hidden="true"></span>
       <span class="txt"><strong>${esc(p.name)}</strong><small>${CATS[p.cat].label} · ${esc(p.type)}</small></span>
-      <span class="km">${fmtKm(p.km)}</span></button>`;
+      <span class="km"><b>${road(p).est ? '~' : ''}${fmtKm(road(p).km)}</b><i>${road(p).est ? '~' : ''}${fmtMin(road(p).min)}</i></span></button>`;
     ul.appendChild(li);
   });
   $('no-results').hidden = items.length > 0;
@@ -102,7 +128,7 @@ function renderList(filter = '') {
 
 function toggleSheet(open) {
   const s = $('sheet'); const on = open ?? !s.classList.contains('open');
-  s.classList.toggle('open', on); s.setAttribute('aria-hidden', String(!on));
+  s.classList.toggle('open', on); s.setAttribute('aria-hidden', String(!on)); $('app').classList.toggle('sheet-open', on);
   $('nav-list').setAttribute('aria-pressed', String(on));
   if (on) {
     const l = $('list'); l.classList.remove('stagger'); void l.offsetWidth; l.classList.add('stagger'); // restart cascade
@@ -114,22 +140,22 @@ function toggleSheet(open) {
 /* ---------- Map ---------- */
 function popupHTML(p, isHQ) {
   const col = isHQ ? '#0b6e8a' : CATS[p.cat].color;
-  const dir = `https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}`;
+  const d = isHQ ? null : road(p);
   return `<div class="iw"><span class="chip" style="background:${col}">${isHQ ? 'Headquarters' : CATS[p.cat].label}</span>
-    <h2>${esc(p.name)}</h2><p>${isHQ ? 'Algurg office · centre of this map' : esc(p.type)}</p>
-    ${isHQ ? '' : `<p class="away">${fmtKm(p.km)} away <span>(straight line)</span></p>`}
-    <a href="${dir}" target="_blank" rel="noopener">Get directions</a></div>`;
+    <h2>${esc(p.name)}</h2><p>${isHQ ? 'Corporate Office · Jebel Ali' : esc(p.type)}</p>
+    ${isHQ ? `<p class="away">${HQ.lat}, ${HQ.lng}</p>` : `<p class="away">From Algurg: ${d.est ? '~' : ''}${fmtKm(d.km)} · ~${fmtMin(d.min)} drive <span>(${d.est ? 'estimate' : 'by road'})</span></p>`}
+    ${isHQ ? '<button class="pill" data-act="copy">Copy GPS</button>' : `<button class="pill" data-act="route" data-i="${PLACES.indexOf(p)}">Show route</button>`}</div>`;
 }
+const POPUP_OPTS = { maxWidth: 260, autoPanPaddingTopLeft: [16, 90], autoPanPaddingBottomRight: [16, 110] };
+const refreshPopups = () => markers.forEach((m, i) => m && m.setPopupContent(popupHTML(PLACES[i])));
 
 /* ---------- Map (Leaflet + OpenStreetMap) ---------- */
 const flyTo = (ll, z) => reduceMotion ? map.setView(ll, z, { animate: false }) : map.flyTo(ll, z, { duration: 0.8 });
 
 function focusPlace(i) {
-  const p = PLACES[i], m = markers[i];
-  if (!mapReady || !m) { toast(p.name); return; }
+  if (!mapReady || !markers[i]) { toast(PLACES[i].name); return; }
   toggleSheet(false);
-  flyTo([p.lat, p.lng], Math.max(map.getZoom(), 14));
-  m.openPopup();
+  showRoute(i);
 }
 
 // Fit the viewport to Algurg + every place, leaving room for the top bar and bottom nav
@@ -151,6 +177,135 @@ function pinIcon(color, scale = 1, pulse = false) {
   });
 }
 
+/* ---------- In-app routing (OSRM): route line, summary card, turn-by-turn steps ---------- */
+let routeGroup, routeSeq = 0, routeMode = 'from', activeI = null, userPos = null;
+const routeCache = {};
+const MODES = { to: 'To Algurg HQ', from: 'From Algurg HQ', me: 'From my location' };
+
+async function fetchJSON(url) {
+  const ac = new AbortController(), t = setTimeout(() => ac.abort(), 9000);
+  try { const r = await fetch(url, { signal: ac.signal }); if (!r.ok) throw new Error('HTTP ' + r.status); return await r.json(); }
+  finally { clearTimeout(t); }
+}
+function setDrive(p, km, min, est) {
+  p.drive = { km, min, est }; resort(); renderList($('q').value); refreshPopups(); saveDrive();
+}
+function getUserPos() {
+  return new Promise((res, rej) => {
+    if (userPos && Date.now() - userPos.t < 300000) return res(userPos);
+    if (!navigator.geolocation) return rej(new Error('unsupported'));
+    navigator.geolocation.getCurrentPosition(
+      pos => res(userPos = { lat: pos.coords.latitude, lng: pos.coords.longitude, t: Date.now() }),
+      rej, { enableHighAccuracy: true, timeout: 10000 });
+  });
+}
+function endpoints(i, mode) {
+  const p = PLACES[i], h = { lat: HQ.lat, lng: HQ.lng, name: 'Algurg HQ' }, pl = { lat: p.lat, lng: p.lng, name: p.name };
+  return mode === 'to' ? [pl, h] : mode === 'me' ? [{ lat: userPos.lat, lng: userPos.lng, name: 'My location' }, pl] : [h, pl];
+}
+const fmtStepDist = m => m < 1000 ? `${Math.max(10, Math.round(m / 10) * 10)} m` : `${(m / 1000).toFixed(1)} km`;
+const compass = b => ['north', 'northeast', 'east', 'southeast', 'south', 'southwest', 'west', 'northwest'][Math.round(((b % 360) + 360) % 360 / 45) % 8];
+function stepText(st) {
+  const m = st.maneuver || {}, mod = m.modifier || '', name = st.name ? ` onto ${esc(st.name)}` : '';
+  switch (m.type) {
+    case 'depart': return `Head ${compass(m.bearing_after ?? 0)}${st.name ? ' on ' + esc(st.name) : ''}`;
+    case 'arrive': return 'Arrive at your destination';
+    case 'turn': return `Turn ${mod || 'ahead'}${name}`;
+    case 'end of road': return `Turn ${mod || 'ahead'} at the end of the road${name}`;
+    case 'fork': return `Keep ${mod || 'ahead'} at the fork${name}`;
+    case 'merge': return `Merge ${mod || ''}${name}`.replace('  ', ' ');
+    case 'on ramp': case 'off ramp': return `Take the ramp ${mod}${name}`.replace('  ', ' ');
+    case 'roundabout': case 'rotary': case 'roundabout turn': return `At the roundabout, take exit ${m.exit || ''}${name}`.replace('  ', ' ');
+    default: return `Continue ${mod === 'straight' || !mod ? 'straight' : mod}${name}`;
+  }
+}
+function drawRoute(latlngs, est) {
+  routeGroup.clearLayers();
+  L.polyline(latlngs, { className: 'route-casing', interactive: false }).addTo(routeGroup);
+  L.polyline(latlngs, { className: 'route-line' + (est ? ' est' : ''), interactive: false }).addTo(routeGroup);
+}
+function fitRoute(latlngs) {
+  const card = $('route-card'), cardH = card.hidden ? 0 : card.offsetHeight + 16;
+  const bar = document.querySelector('.bottomnav').offsetHeight + 12;
+  map.fitBounds(L.latLngBounds(latlngs), { paddingTopLeft: [24, 90], paddingBottomRight: [24, bar + cardH + 24], maxZoom: 15, animate: false });
+}
+function clearRoute() {
+  routeSeq++; activeI = null; routeGroup?.clearLayers();
+  $('route-card').hidden = true; $('app').classList.remove('route-on'); map?.closePopup();
+}
+function paintCard(i, mode, o, d, r, note) {
+  const card = $('route-card');
+  $('rc-from').textContent = o.name; $('rc-to').textContent = d.name;
+  card.querySelectorAll('[data-mode]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mode === mode)));
+  $('rc-km').textContent = r ? fmtKm(r.km) : '…';
+  $('rc-min').textContent = r ? '~' + fmtMin(r.min) : '…';
+  $('rc-note').textContent = note || '';
+  $('rc-steps').innerHTML = r && r.steps ? r.steps.map(st => `<li><span>${stepText(st)}</span><small>${st.distance > 0 ? fmtStepDist(st.distance) : ''}</small></li>`).join('') : '';
+  $('rc-ext').href = `https://www.google.com/maps/dir/?api=1&origin=${o.lat},${o.lng}&destination=${d.lat},${d.lng}&travelmode=driving`;
+  card.hidden = false; $('app').classList.add('route-on');
+  $('app').style.setProperty('--card-h', card.offsetHeight + 'px');
+}
+async function showRoute(i, mode = routeMode) {
+  if (!mapReady) return;
+  const seq = ++routeSeq; activeI = i;
+  if (mode === 'me') {
+    toast('Finding your location…');
+    try { await getUserPos(); } catch { toast('Location unavailable. Using Algurg HQ as the start.'); mode = 'from'; }
+    if (seq !== routeSeq) return;
+  }
+  routeMode = mode;
+  const [o, d] = endpoints(i, mode), p = PLACES[i];
+  const key = `${i}|${mode}|${mode === 'me' ? o.lat.toFixed(3) + ',' + o.lng.toFixed(3) : ''}`;
+  let r = routeCache[key];
+  if (!r) {
+    const straight = [[o.lat, o.lng], [d.lat, d.lng]];       // dashed placeholder while the road route loads
+    paintCard(i, mode, o, d, null, 'Loading road route…');
+    drawRoute(straight, true); fitRoute(straight); markers[i].openPopup();
+    try {
+      const j = await fetchJSON(`${ROUTER}/route/v1/driving/${o.lng},${o.lat};${d.lng},${d.lat}?overview=full&geometries=geojson&steps=true`);
+      const rt = j.routes && j.routes[0]; if (!rt) throw new Error('no route');
+      r = routeCache[key] = { line: rt.geometry.coordinates.map(([lng, lat]) => [lat, lng]), km: rt.distance / 1000,
+        min: Math.max(1, Math.round(rt.duration / 60)), steps: (rt.legs[0] && rt.legs[0].steps || []) };
+      if (mode === 'from') setDrive(p, r.km, r.min, false);
+    } catch (e) {
+      console.warn('Route failed', e);
+      if (seq === routeSeq) { const est = road(p); paintCard(i, mode, o, d, { km: est.km, min: est.min }, 'Road route unavailable. Showing estimate and a straight line.'); }
+      return;
+    }
+    if (seq !== routeSeq) return;
+  }
+  paintCard(i, mode, o, d, r, mode === 'me' ? 'Live from your GPS position' : 'By road');
+  drawRoute(r.line, false); fitRoute(r.line); markers[i].openPopup();
+}
+
+// One request for all 21 road distances + times (from Algurg)
+async function loadDriving() {
+  const sub = $('sheet-sub');
+  try {
+    const coords = [HQ, ...PLACES].map(q => `${q.lng},${q.lat}`).join(';');
+    const j = await fetchJSON(`${ROUTER}/table/v1/driving/${coords}?sources=0&annotations=duration,distance`);
+    const dur = j.durations && j.durations[0], dist = j.distances && j.distances[0];
+    if (!dur) throw new Error('no durations');
+    PLACES.forEach((p, k) => {
+      if (dur[k + 1] == null) return;
+      const m = dist && dist[k + 1];
+      p.drive = { min: Math.max(1, Math.round(dur[k + 1] / 60)), km: m != null ? m / 1000 : p.km * ROAD_FACTOR, est: m == null };
+    });
+    sub.textContent = 'Driving distance and time from Algurg, nearest first';
+  } catch (e) {
+    console.warn('Driving data unavailable', e);
+    sub.textContent = PLACES.some(p => p.drive) ? 'Saved driving data, nearest first' : 'Estimates (straight line × 1.3), nearest first';
+  }
+  resort(); renderList($('q').value); refreshPopups(); saveDrive();
+}
+
+function copyText(txt) {
+  const done = () => toast('Copied: ' + txt);
+  if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(txt).then(done, () => toast('Copy failed'));
+  else { const t = document.createElement('textarea'); t.value = txt; document.body.appendChild(t); t.select();
+    try { document.execCommand('copy'); done(); } catch { toast('Copy failed'); } t.remove(); }
+}
+
 function initMap() {
   if (typeof L === 'undefined') return window.mapFailed();
   try {
@@ -165,16 +320,18 @@ function initMap() {
     let warned = false;
     tiles.on('tileerror', () => { if (!warned) { warned = true; toast(navigator.onLine ? 'Some map tiles failed to load' : 'Offline: showing saved map areas only'); } });
 
+    routeGroup = L.layerGroup().addTo(map);
     hqMarker = L.marker([HQ.lat, HQ.lng], { icon: pinIcon('#0b6e8a', 1.5, true), title: HQ.name, alt: HQ.name, zIndexOffset: 1000 })
-      .addTo(map).bindPopup(popupHTML(HQ, true), { maxWidth: 260 });
-    markers = PLACES.map(p => {
+      .addTo(map).bindPopup(popupHTML(HQ, true), POPUP_OPTS);
+    markers = PLACES.map((p, i) => {
       try {
         return L.marker([p.lat, p.lng], { icon: pinIcon(CATS[p.cat].color), title: p.name, alt: p.name })
-          .addTo(map).bindPopup(popupHTML(p), { maxWidth: 260 });
+          .addTo(map).bindPopup(popupHTML(p), POPUP_OPTS).on('click', () => showRoute(i));
       } catch (e) { console.warn('Marker failed:', p.name, e); return null; }
     });
     mapReady = true;
     fitAll();
+    loadDriving();
     addEventListener('resize', () => { map.invalidateSize(); setTimeout(fitAll, 250); });
   } catch (err) { console.error(err); window.mapFailed(); }
 }
@@ -204,13 +361,25 @@ function locate() {
 
 $('nav-list').onclick = () => toggleSheet();
 $('open-list-empty').onclick = () => toggleSheet(true);
-$('nav-fit').onclick = () => { toggleSheet(false); fitAll(); };
-$('nav-hq').onclick = () => { if (!mapReady) return; toggleSheet(false); flyTo([HQ.lat, HQ.lng], 15); hqMarker.openPopup(); };
+$('nav-fit').onclick = () => { toggleSheet(false); clearRoute(); fitAll(); };
+$('nav-hq').onclick = () => { if (!mapReady) return; toggleSheet(false); clearRoute(); flyTo([HQ.lat, HQ.lng], 15); hqMarker.openPopup(); };
 $('nav-locate').onclick = locate;
+$('rc-close').onclick = () => { clearRoute(); fitAll(); };
+$('route-card').addEventListener('click', e => { const b = e.target.closest('[data-mode]'); if (b && activeI !== null) showRoute(activeI, b.dataset.mode); });
+$('rc-share').onclick = () => copyText(`${location.origin}${location.pathname}?place=${encodeURIComponent(PLACES[activeI].name)}&mode=${routeMode === 'to' ? 'to' : 'from'}`);
+document.addEventListener('click', e => {           // popup buttons (popups are rendered by Leaflet, so use delegation)
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  if (b.dataset.act === 'route') showRoute(+b.dataset.i);
+  if (b.dataset.act === 'copy') copyText(`${HQ.lat}, ${HQ.lng}`);
+});
 $('q').addEventListener('input', e => renderList(e.target.value));
 $('list').addEventListener('click', e => { const b = e.target.closest('.item'); if (b) focusPlace(+b.dataset.i); });
 addEventListener('keydown', e => { if (e.key === 'Escape') toggleSheet(false); });
+buildChips();
 renderList();
+const qp = new URLSearchParams(location.search);
+const sharedI = PLACES.findIndex(p => p.name === qp.get('place'));
+if (sharedI >= 0) setTimeout(() => showRoute(sharedI, qp.get('mode') === 'to' ? 'to' : 'from'), 600);
 if (new URLSearchParams(location.search).get('view') === 'list') toggleSheet(true);
 
 /* ---------- Online / offline ---------- */

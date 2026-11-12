@@ -47,7 +47,6 @@
       <div class="shimmer"></div>
       <p>Loading map…</p>
     </div>
-    <button id="clear-route" class="btn route-clear" hidden>Clear route</button>
     <div id="map-error" class="empty" hidden>
       <h2>Map unavailable</h2>
       <p>You can still browse all places in the list.</p>
@@ -65,9 +64,30 @@
     <button class="btn ghost" id="install-no" aria-label="Dismiss install prompt">Not now</button>
   </aside>
 
+  <section id="route-card" class="route-card" hidden aria-label="Route details">
+    <div class="rc-head">
+      <p class="rc-names"><span id="rc-from"></span><span aria-hidden="true"> → </span><span id="rc-to"></span></p>
+      <button id="rc-close" class="icon-btn" aria-label="Close route">&times;</button>
+    </div>
+    <div class="seg" role="group" aria-label="Route direction">
+      <button data-mode="to" aria-pressed="false">To Algurg HQ</button>
+      <button data-mode="from" aria-pressed="true">From Algurg HQ</button>
+      <button data-mode="me" aria-pressed="false">From my location</button>
+    </div>
+    <div class="rc-stats"><strong id="rc-km">…</strong><strong id="rc-min">…</strong></div>
+    <p id="rc-note" class="rc-note" role="status"></p>
+    <details class="steps"><summary>Turn-by-turn steps</summary><ol id="rc-steps"></ol></details>
+    <div class="rc-actions">
+      <button id="rc-share" class="pill">Share route</button>
+      <a id="rc-ext" class="icon-btn ext" href="#" target="_blank" rel="noopener" aria-label="Open in Google Maps (external)" title="Open in Google Maps (external)">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></a>
+    </div>
+  </section>
+
   <section id="sheet" class="sheet" aria-hidden="true" aria-label="Places list">
     <div class="grab" aria-hidden="true"></div>
     <div class="sheet-head"><h2>Closest to Algurg</h2><p id="sheet-sub">Driving distance and time from Algurg, nearest first</p></div>
+    <div id="chips" class="chips" role="group" aria-label="Filter by category"></div>
     <label class="search">
       <span class="sr">Search places</span>
       <input id="q" type="search" placeholder="Search places or categories" autocomplete="off" enterkeyhint="search">
