@@ -1,5 +1,5 @@
 'use strict';
-/* Algurg Map Locator (Leaflet + OpenStreetMap: no API key or billing needed). POI coordinates come from the supplied Google Plus Codes (decoded to ~14 m cells)
+/* Algurg Map Locator (Leaflet + CARTO/OpenStreetMap tiles: no API key or billing needed). POI coordinates come from the supplied Google Plus Codes (decoded to ~14 m cells)
    or exact Google Maps URL values (Aster Medical Center, Atlantis Monorail, Aster Clinic Al Barsha). */
 /* >>> PASTE ALGURG'S EXACT LAT/LNG ON THE NEXT LINE (replace 25.0990 and 55.1640). <<<
    How: open Algurg in Google Maps, right-click its pin, click the "lat, lng" numbers at the top of the menu to copy.
@@ -138,9 +138,10 @@ function initMap() {
       zoomAnimation: !reduceMotion, fadeAnimation: !reduceMotion, markerZoomAnimation: !reduceMotion });
     L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-    const tiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19, crossOrigin: true,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors'
+    // CARTO Voyager: free, no API key, Latin/English labels (default OSM tiles show local Arabic names in Dubai)
+    const tiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+      subdomains: 'abcd', maxZoom: 20, crossOrigin: true,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>'
     }).addTo(map);
     const hideSkeleton = () => $('skeleton').classList.add('done');
     tiles.once('load', hideSkeleton); setTimeout(hideSkeleton, 6000);

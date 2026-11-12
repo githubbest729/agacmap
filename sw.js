@@ -1,5 +1,5 @@
-const VERSION = 'algurg-map-v7';
-const TILES = 'algurg-tiles-v1';
+const VERSION = 'algurg-map-v8';
+const TILES = 'algurg-tiles-v2';
 const SHELL = ['./', 'index.html', 'manifest.json', 'css/styles.css', 'js/app.js',
   'assets/icon.svg', 'vendor/leaflet/leaflet.js', 'vendor/leaflet/leaflet.css',
   'vendor/leaflet/images/marker-icon.png', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png', 'favicon.ico'];
@@ -18,7 +18,7 @@ self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
-  if (url.hostname.endsWith('tile.openstreetmap.org')) {        // cache map tiles the user has viewed (offline fallback)
+  if (url.hostname.endsWith('basemaps.cartocdn.com') || url.hostname.endsWith('tile.openstreetmap.org')) {        // cache map tiles the user has viewed (offline fallback)
     e.respondWith(caches.open(TILES).then(async c => {
       const hit = await c.match(req); if (hit) return hit;
       try {
