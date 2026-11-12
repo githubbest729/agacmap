@@ -1,5 +1,5 @@
 const VERSION = 'algurg-map-v9';
-const TILES = 'algurg-tiles-v2';
+const TILES = 'algurg-tiles-v4';
 const SHELL = ['./', 'index.html', 'manifest.json', 'css/styles.css', 'js/app.js',
   'assets/icon.svg', 'assets/fonts/inter-latin-wght-normal.woff2', 'vendor/leaflet/leaflet.js', 'vendor/leaflet/leaflet.css',
   'vendor/leaflet/images/marker-icon.png', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png', 'favicon.ico'];
